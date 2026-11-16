@@ -5,7 +5,7 @@ import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
-import { getDb, isPglite } from './client';
+import { getDb, getPgliteInstance, isPglite } from './client';
 import { assertTestIsolationGuard } from './guard';
 import * as schema from './schema';
 
@@ -19,6 +19,21 @@ export async function runMigrations(): Promise<void> {
 
     const activeDb = getDb();
     if (isPglite()) {
+        const pglite = getPgliteInstance();
+        if (pglite) {
+            await pglite.exec(`
+                CREATE SCHEMA IF NOT EXISTS auth;
+                CREATE TABLE IF NOT EXISTS auth.users (
+                    id uuid PRIMARY KEY,
+                    email text,
+                    raw_user_meta_data jsonb,
+                    created_at timestamptz DEFAULT now()
+                );
+                CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
+                    SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+                $$ LANGUAGE sql STABLE;
+            `);
+        }
         await migratePglite(activeDb as PgliteDatabase<typeof schema>, { migrationsFolder: MIGRATIONS_DIR });
     } else {
         await migratePg(activeDb as NodePgDatabase<typeof schema>, { migrationsFolder: MIGRATIONS_DIR });
