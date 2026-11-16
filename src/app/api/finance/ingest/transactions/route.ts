@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '@src/app/api/utils';
-import { requireTokenOrSession } from '@src/lib/auth/require-token-or-session';
+import { requireUserApi } from '@src/lib/auth/dal';
 import { ingestBatchSchema } from '@src/lib/finance/ingest/schema';
 import { ingestItems } from '@src/lib/finance/ingest/service';
 import { dispatchEvent } from '@src/lib/finance/webhooks/dispatcher';
@@ -11,7 +11,8 @@ export async function POST(request: NextRequest) {
   if (gate) return gate;
 
   try {
-    const { userId } = await requireTokenOrSession('finance:ingest', request);
+    const user = await requireUserApi();
+    const userId = user.id;
     const json = await request.json();
     const { items } = ingestBatchSchema.parse(json);
 

@@ -31,12 +31,12 @@ export const registerSchema = z
 
 export const safeUserSchema = z.object({
     id: z.string(),
-    email: z.string().email(),
-    name: z.string(),
-    role: z.string(),
-    avatarUrl: z.string().nullable(),
-    createdAt: z.coerce.date(),
-    lastLoginAt: z.coerce.date().nullable().default(null),
+    email: z.string(),
+    name: z.string().default('User'),
+    role: z.string().default('member'),
+    avatarUrl: z.string().nullable().optional(),
+    createdAt: z.coerce.date().default(() => new Date()),
+    lastLoginAt: z.coerce.date().nullable().optional(),
 });
 
 export const updateProfileSchema = z.object({

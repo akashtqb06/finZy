@@ -1,9 +1,3 @@
-import { eq } from 'drizzle-orm';
-import { db } from '@src/lib/db';
-import { appSettings } from '@src/lib/db/schema';
-import { getAllowedConnectorTypes, setAllowedConnectorTypes } from './allowed-connectors';
-import { logAuditEvent } from '@src/lib/audit/audit-log';
-
 export interface GeneralSettings {
     appName: string;
     allowRegistration: boolean;
@@ -23,56 +17,25 @@ export interface EnvironmentInfo {
 }
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
-    const rows = await db.select().from(appSettings);
-    const map = new Map(rows.map((r) => [r.key, r.value]));
-
-    const appName = typeof map.get('appName') === 'string' ? (map.get('appName') as string) : 'BI Kit';
-    const allowRegistration = typeof map.get('allowRegistration') === 'boolean'
-        ? (map.get('allowRegistration') as boolean)
-        : true;
-    const sessionLifetimeDays = typeof map.get('sessionLifetimeDays') === 'number'
-        ? (map.get('sessionLifetimeDays') as number)
-        : 30;
-
-    const allowedConnectorTypes = await getAllowedConnectorTypes();
-
     return {
-        appName,
-        allowRegistration,
-        sessionLifetimeDays,
-        allowedConnectorTypes,
+        appName: process.env.APP_NAME || 'Finzy',
+        allowRegistration: false,
+        sessionLifetimeDays: 30,
+        allowedConnectorTypes: [],
     };
 }
 
 export async function getPublicSettings(): Promise<PublicSettings> {
-    try {
-        const [row] = await db
-            .select()
-            .from(appSettings)
-            .where(eq(appSettings.key, 'appName'))
-            .limit(1);
-
-        const appName =
-            row && typeof row.value === 'string' && row.value.trim().length > 0
-                ? row.value.trim()
-                : 'BI Kit';
-
-        return { appName };
-    } catch {
-        return { appName: 'BI Kit' };
-    }
+    return {
+        appName: process.env.APP_NAME || 'Finzy',
+    };
 }
 
 export function getEnvironmentInfo(): EnvironmentInfo {
     const publicUrl = process.env.APP_URL || 'http://localhost:3000';
-    const allowPrivate = process.env.ALLOW_PRIVATE_NETWORKS === 'true';
-    const networkPolicy = allowPrivate
-        ? 'Private network access permitted (ALLOW_PRIVATE_NETWORKS=true)'
-        : 'SSRF Protection Active (RFC 1918 private & loopback addresses blocked)';
-
     return {
         publicUrl,
-        networkPolicy,
+        networkPolicy: 'SSRF Protection Active (RFC 1918 private & loopback addresses blocked)',
         nodeEnv: process.env.NODE_ENV || 'development',
         secureCookies: publicUrl.toLowerCase().startsWith('https://'),
     };
@@ -80,38 +43,12 @@ export function getEnvironmentInfo(): EnvironmentInfo {
 
 export async function updateGeneralSettings(
     updates: Partial<GeneralSettings>,
-    adminUserId: string
+    _adminUserId?: string
 ): Promise<GeneralSettings> {
-    if (updates.appName !== undefined) {
-        await db
-            .insert(appSettings)
-            .values({ key: 'appName', value: updates.appName })
-            .onConflictDoUpdate({ target: appSettings.key, set: { value: updates.appName } });
-    }
-
-    if (updates.allowRegistration !== undefined) {
-        await db
-            .insert(appSettings)
-            .values({ key: 'allowRegistration', value: updates.allowRegistration })
-            .onConflictDoUpdate({ target: appSettings.key, set: { value: updates.allowRegistration } });
-    }
-
-    if (updates.sessionLifetimeDays !== undefined) {
-        await db
-            .insert(appSettings)
-            .values({ key: 'sessionLifetimeDays', value: updates.sessionLifetimeDays })
-            .onConflictDoUpdate({ target: appSettings.key, set: { value: updates.sessionLifetimeDays } });
-    }
-
-    if (updates.allowedConnectorTypes !== undefined) {
-        await setAllowedConnectorTypes(updates.allowedConnectorTypes);
-    }
-
-    await logAuditEvent({
-        userId: adminUserId,
-        action: 'settings.update',
-        details: updates as Record<string, unknown>,
-    });
-
-    return getGeneralSettings();
+    return {
+        appName: updates.appName || process.env.APP_NAME || 'Finzy',
+        allowRegistration: updates.allowRegistration ?? false,
+        sessionLifetimeDays: updates.sessionLifetimeDays ?? 30,
+        allowedConnectorTypes: updates.allowedConnectorTypes ?? [],
+    };
 }

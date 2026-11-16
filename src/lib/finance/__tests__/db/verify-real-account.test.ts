@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { db, finAccounts, finTransactions, finUserSettings, users } from '@src/lib/db';
+import { db, finAccounts, finTransactions, finUserSettings, profiles } from '@src/lib/db';
 import { eq, and, isNull } from 'drizzle-orm';
 import { parsePfCsv, parsePfPortalText, computeReconciliation } from '@src/lib/finance/domain/pf/parser';
 import { commitPfPassbook, getPfAccountSummary } from '@src/lib/finance/db-service/pf';
@@ -9,8 +9,14 @@ import { getOverviewStats } from '@src/lib/finance/db-service/stats';
 
 describe('Real Account Verification (Docker Stack & EPFO Passbook)', () => {
   it('imports fixture, reconciles green, verifies net worth, anchor, privacy, and portal text', async () => {
-    // 1. Get real user
-    const [realUser] = await db.select().from(users).limit(1);
+    // 1. Get or create real profile
+    let [realUser] = await db.select().from(profiles).limit(1);
+    if (!realUser) {
+      [realUser] = await db.insert(profiles).values({
+        id: 'a0000000-0000-4000-a000-0000000000c1',
+        displayName: 'Real User',
+      }).returning();
+    }
     const userId = realUser.id;
 
     // 2. Create or find EPF account

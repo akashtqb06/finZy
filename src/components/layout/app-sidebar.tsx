@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboardIcon,
-    BookOpenIcon,
-    DatabaseIcon,
-    HardDriveIcon,
-    SettingsIcon,
-    BarChart3Icon,
+    ArrowLeftRightIcon,
     WalletIcon,
+    PieChartIcon,
+    RepeatIcon,
+    UploadCloudIcon,
+    SettingsIcon,
 } from 'lucide-react';
 import {
     Sidebar,
@@ -26,29 +26,34 @@ import {
 
 const navItems = [
     {
-        label: 'Dashboards',
-        href: '/dashboards',
+        label: 'Overview',
+        href: '/finance/overview',
         icon: LayoutDashboardIcon,
     },
     {
-        label: 'Workbooks',
-        href: '/workbooks',
-        icon: BookOpenIcon,
+        label: 'Transactions',
+        href: '/finance/transactions',
+        icon: ArrowLeftRightIcon,
     },
     {
-        label: 'Finance',
-        href: '/finance',
+        label: 'Accounts',
+        href: '/finance/accounts',
         icon: WalletIcon,
     },
     {
-        label: 'Data Sources',
-        href: '/data-sources',
-        icon: DatabaseIcon,
+        label: 'Budgets',
+        href: '/finance/budgets',
+        icon: PieChartIcon,
     },
     {
-        label: 'Data Store',
-        href: '/data-store',
-        icon: HardDriveIcon,
+        label: 'Recurring',
+        href: '/finance/recurring',
+        icon: RepeatIcon,
+    },
+    {
+        label: 'Import',
+        href: '/finance/import',
+        icon: UploadCloudIcon,
     },
     {
         label: 'Settings',
@@ -57,38 +62,19 @@ const navItems = [
     },
 ] as const;
 import { UserMenu } from '@src/components/auth/user-menu';
-import { useCurrentUser } from '@src/components/auth/user-provider';
-import { isAnyFinanceFeatureEnabled } from '@src/lib/finance/flags';
 import { useAppSettings } from '@src/components/settings/app-settings-provider';
 
 export function AppSidebar() {
     const pathname = usePathname();
     const { appName } = useAppSettings();
-    const user = useCurrentUser();
 
-    const visibleNavItems = navItems.filter((item) => {
-        if (user?.mustChangePassword) {
-            return item.href === '/settings';
-        }
-        if (item.href === '/finance') {
-            return isAnyFinanceFeatureEnabled();
-        }
-        return true;
-    }).map((item) => {
-        if (user?.mustChangePassword && item.href === '/settings') {
-            return {
-                ...item,
-                href: '/settings/security?forced=true',
-            };
-        }
-        return item;
-    });
+    const visibleNavItems = navItems;
 
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader className="border-b">
                 <div className="flex items-center gap-2 px-2 py-3">
-                    <BarChart3Icon className="size-5 text-primary shrink-0" />
+                    <WalletIcon className="size-5 text-primary shrink-0" />
                     <span
                         className="font-semibold text-base tracking-tight truncate group-data-[collapsible=icon]:hidden"
                         title={appName}

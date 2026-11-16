@@ -5,13 +5,25 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
 import { finAccounts } from './finance';
-import { users } from '../schema';
+import { profiles } from '../schema';
 
 describe('Finance Migration on PGlite', () => {
   it('successfully applies all PostgreSQL migrations on a fresh PGlite database', async () => {
     const pglite = new PGlite();
     const db = drizzle(pglite);
     const migrationsFolder = path.join(process.cwd(), 'src/lib/db/migrations');
+
+    // Setup auth schema stub for PGlite before migrations
+    await pglite.exec(`
+      CREATE SCHEMA IF NOT EXISTS auth;
+      CREATE TABLE IF NOT EXISTS auth.users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text
+      );
+      CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+        SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+      $$;
+    `);
 
     // Run the migrations against the fresh PGlite database
     await expect(migrate(db, { migrationsFolder })).resolves.not.toThrow();
@@ -26,6 +38,7 @@ describe('Finance Migration on PGlite', () => {
 
     const tableNames = result.rows.map((r) => r.table_name);
 
+    expect(tableNames).toContain('profiles');
     expect(tableNames).toContain('fin_accounts');
     expect(tableNames).toContain('fin_categories');
     expect(tableNames).toContain('fin_transactions');
@@ -45,20 +58,19 @@ describe('Finance Migration on PGlite', () => {
     expect(constraintNames).toContain('fin_transactions_amount_check');
     expect(constraintNames).toContain('fin_transactions_transfer_check');
 
-    // Create a user and insert a wallet account into fin_accounts
-    await db.insert(users).values({
-      id: 'usr_wallet_test',
-      email: 'wallet_tester@example.com',
-      name: 'Wallet Tester',
-      passwordHash: 'dummyhash',
-      role: 'member',
+    // Create an auth user and profile, then insert a wallet account into fin_accounts
+    const testUserId = 'a0000000-0000-4000-a000-000000000099';
+    await pglite.query(`INSERT INTO auth.users (id, email) VALUES ('${testUserId}'::uuid, 'tester@example.com')`);
+    await db.insert(profiles).values({
+      id: testUserId,
+      displayName: 'Wallet Tester',
     });
 
     const [insertedWallet] = await db
       .insert(finAccounts)
       .values({
         id: 'acc_wallet_test_1',
-        userId: 'usr_wallet_test',
+        userId: testUserId,
         name: 'Paytm Wallet',
         kind: 'wallet',
         class: 'asset',
@@ -81,4 +93,3 @@ describe('Finance Migration on PGlite', () => {
     await pglite.close();
   });
 });
-

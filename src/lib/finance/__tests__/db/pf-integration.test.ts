@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { db, finAccounts, finPfEntries, finTransactions, finUserSettings, finValuations, users } from '@src/lib/db';
+import { db, finAccounts, finPfEntries, finTransactions, finUserSettings, finValuations, profiles } from '@src/lib/db';
 import { eq, and } from 'drizzle-orm';
 import { parsePfCsv, parsePfPortalText } from '../../domain/pf/parser';
 import {
@@ -11,8 +11,8 @@ import {
 } from '../../db-service/pf';
 import { getOverviewStats } from '../../db-service/stats';
 
-const USER_A = 'usr_pf_test_user_a';
-const USER_B = 'usr_pf_test_user_b';
+const USER_A = 'a0000000-0000-4000-a000-0000000000f1';
+const USER_B = 'b0000000-0000-4000-b000-0000000000f2';
 
 describe('EPFO Passbook & PF Integration Tests', () => {
   let accountA: string;
@@ -28,13 +28,13 @@ describe('EPFO Passbook & PF Integration Tests', () => {
     await db.delete(finAccounts).where(eq(finAccounts.userId, USER_B));
     await db.delete(finUserSettings).where(eq(finUserSettings.userId, USER_A));
     await db.delete(finUserSettings).where(eq(finUserSettings.userId, USER_B));
-    await db.delete(users).where(eq(users.id, USER_A));
-    await db.delete(users).where(eq(users.id, USER_B));
+    await db.delete(profiles).where(eq(profiles.id, USER_A));
+    await db.delete(profiles).where(eq(profiles.id, USER_B));
 
     // Create test users
-    await db.insert(users).values([
-      { id: USER_A, email: 'pf_user_a@example.com', name: 'User A', passwordHash: 'hash', role: 'member' },
-      { id: USER_B, email: 'pf_user_b@example.com', name: 'User B', passwordHash: 'hash', role: 'member' },
+    await db.insert(profiles).values([
+      { id: USER_A, displayName: 'User A' },
+      { id: USER_B, displayName: 'User B' },
     ]);
 
     // Create EPF accounts

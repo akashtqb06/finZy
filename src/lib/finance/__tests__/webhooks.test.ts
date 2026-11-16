@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'crypto';
 import { db } from '@src/lib/db';
-import { users, webhookDeliveries, webhookEndpoints } from '@src/lib/db/schema';
+import { profiles, webhookDeliveries, webhookEndpoints } from '@src/lib/db/schema';
 import { inArray } from 'drizzle-orm';
 import {
   dispatchEvent,
@@ -10,15 +10,15 @@ import {
 } from '../webhooks/dispatcher';
 
 describe('Webhooks & Outbound Dispatcher', () => {
-  const userA = 'usr_webhook_a';
-  const userB = 'usr_webhook_b';
+  const userA = 'a0000000-0000-4000-a000-0000000000a1';
+  const userB = 'b0000000-0000-4000-b000-0000000000b2';
   const secretA = 'super_secret_webhook_key_12345';
 
   beforeEach(async () => {
-    // Seed users
-    await db.insert(users).values([
-      { id: userA, email: 'webhooks_a@example.com', name: 'Webhook User A', passwordHash: 'h', role: 'member' },
-      { id: userB, email: 'webhooks_b@example.com', name: 'Webhook User B', passwordHash: 'h', role: 'member' },
+    // Seed profiles
+    await db.insert(profiles).values([
+      { id: userA, displayName: 'Webhook User A' },
+      { id: userB, displayName: 'Webhook User B' },
     ]).onConflictDoNothing();
   });
 

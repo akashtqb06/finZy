@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { checkDatabaseHealth } from '@src/lib/db/health';
-import { getBackupHeartbeat } from '@src/lib/backup/heartbeat';
 
 export async function GET() {
     const health = await checkDatabaseHealth();
-    const backup = getBackupHeartbeat();
 
     if (!health.ok) {
         if (process.env.NODE_ENV !== 'production') {
@@ -17,7 +15,6 @@ export async function GET() {
                     error: health.exactFix,
                     fix: health.fix,
                     detail: health.detail,
-                    backup,
                 },
                 { status: 503 }
             );
@@ -29,7 +26,6 @@ export async function GET() {
                 status: 'error',
                 database: 'unhealthy',
                 financeBackend: process.env.FINANCE_BACKEND ?? 'db',
-                backup,
             },
             { status: 503 }
         );
@@ -40,7 +36,6 @@ export async function GET() {
             status: 'ok',
             database: 'healthy',
             financeBackend: process.env.FINANCE_BACKEND ?? 'db',
-            backup,
         },
         { status: 200 }
     );

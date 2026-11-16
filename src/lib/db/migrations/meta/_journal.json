@@ -5,50 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1793183086587,
+      "when": 1794805841061,
       "tag": "0000_init",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1793189108012,
-      "tag": "0001_real_dark_phoenix",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1793284539621,
-      "tag": "0002_regular_wolverine",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1793284772441,
-      "tag": "0003_rich_taskmaster",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1793294394233,
-      "tag": "0004_colorful_titanium_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1793400000000,
-      "tag": "0005_automation",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1793629755266,
-      "tag": "0006_true_synch",
+      "when": 1794805841062,
+      "tag": "0001_supabase_security",
       "breakpoints": true
     }
   ]

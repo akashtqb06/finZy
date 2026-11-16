@@ -338,6 +338,7 @@ export async function commitPfPassbook(
       await tx
         .insert(finValuations)
         .values({
+          userId,
           accountId,
           date: anchorDate,
           value: pfAnchorValue,

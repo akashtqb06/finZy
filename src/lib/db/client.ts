@@ -5,7 +5,6 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import { type PgDatabase, type PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { PGlite } from '@electric-sql/pglite';
 import * as schema from './schema';
-import { refreshPaths } from './paths';
 import { assertTestIsolationGuard } from './guard';
 import { wrapDbError, wrapDrizzleSession, wrapQueryThenable } from './errors';
 
@@ -64,8 +63,6 @@ function shouldUsePglite(): boolean {
 }
 
 function createDb(): AppDb {
-    refreshPaths();
-
     if (shouldUsePglite()) {
         assertTestIsolationGuard();
         const pglite = new PGlite();

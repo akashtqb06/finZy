@@ -6,7 +6,7 @@ import {
   finInbox,
   finTransactions,
   payeeRules,
-  users,
+  profiles,
 } from '@src/lib/db';
 import { eq, inArray } from 'drizzle-orm';
 import { ingestItems } from '../ingest/service';
@@ -14,18 +14,18 @@ import { approveItems, listInbox, rejectItems, learnPayeeRule } from '../inbox/s
 import { ingestBatchSchema, ingestItemSchema } from '../ingest/schema';
 
 describe('Transaction Ingest & Inbox Workflow', () => {
-  const userA = 'usr_ingest_a';
-  const userB = 'usr_ingest_b';
+  const userA = 'a0000000-0000-4000-a000-0000000000d1';
+  const userB = 'b0000000-0000-4000-b000-0000000000d2';
   const accountA1 = 'acc_ingest_hdfc_savings';
   const accountA2 = 'acc_ingest_hdfc_card';
   const categoryDining = 'cat_ingest_dining';
   const categoryGroceries = 'cat_ingest_groceries';
 
   beforeEach(async () => {
-    // Seed users
-    await db.insert(users).values([
-      { id: userA, email: 'ingest_a@example.com', name: 'User A', passwordHash: 'h', role: 'member' },
-      { id: userB, email: 'ingest_b@example.com', name: 'User B', passwordHash: 'h', role: 'member' },
+    // Seed profiles
+    await db.insert(profiles).values([
+      { id: userA, displayName: 'User A' },
+      { id: userB, displayName: 'User B' },
     ]).onConflictDoNothing();
 
     // Seed accounts for User A

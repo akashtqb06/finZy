@@ -18,23 +18,19 @@ import {
   finInbox,
   finTransactions,
   payeeRules,
-  users,
+  profiles,
 } from '@src/lib/db';
 import { eq } from 'drizzle-orm';
-import { createToken, validateToken } from '@src/lib/auth/api-tokens';
 import { ingestItems } from '../ingest/service';
 import { approveItems, listInbox } from '../inbox/service';
 import { calculateAccountBalance } from '../domain/balances';
 
 describe('VERIFY: End-to-End Automation & Ingestion', () => {
-  const userId = 'usr_verify_e2e';
+  const userId = 'a0000000-0000-4000-a000-0000000000e1';
   const cardAccountId = 'acc_verify_card_4521';
   const savingsAccountId = 'acc_verify_savings_7890';
   const categoryShopping = 'cat_verify_shopping';
   const categoryIncome = 'cat_verify_income';
-
-  let apiToken = '';
-  let tokenPrefix = '';
 
   beforeAll(async () => {
     // Clean up
@@ -43,15 +39,12 @@ describe('VERIFY: End-to-End Automation & Ingestion', () => {
     await db.delete(payeeRules).where(eq(payeeRules.userId, userId));
     await db.delete(finAccounts).where(eq(finAccounts.userId, userId));
     await db.delete(finCategories).where(eq(finCategories.userId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await db.delete(profiles).where(eq(profiles.id, userId));
 
-    // Seed test user
-    await db.insert(users).values({
+    // Seed test profile
+    await db.insert(profiles).values({
       id: userId,
-      email: 'verify_e2e@example.com',
-      name: 'E2E Verifier',
-      passwordHash: 'dummy',
-      role: 'member',
+      displayName: 'E2E Verifier',
     });
 
     // Seed test accounts matching fixture hints: Card XX4521 and Savings XX7890
@@ -96,24 +89,13 @@ describe('VERIFY: End-to-End Automation & Ingestion', () => {
     await db.delete(payeeRules).where(eq(payeeRules.userId, userId));
     await db.delete(finAccounts).where(eq(finAccounts.userId, userId));
     await db.delete(finCategories).where(eq(finCategories.userId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await db.delete(profiles).where(eq(profiles.id, userId));
   });
 
-  it('Step 1: Creates an API token (raw shown once, prefix + scopes stored)', async () => {
-    const { token, record } = await createToken(userId, 'n8n E2E Ingester', ['finance:ingest']);
-
-    expect(token).toBeDefined();
-    expect(token.length).toBe(64);
-    apiToken = token;
-    tokenPrefix = record.prefix;
-
-    expect(tokenPrefix).toBe(token.slice(0, 8));
-    expect(record.scopes).toEqual(['finance:ingest']);
-
-    // Validates with finance:ingest
-    const auth = await validateToken(apiToken, 'finance:ingest');
-    expect(auth).not.toBeNull();
-    expect(auth?.userId).toBe(userId);
+  it('Step 1: Verifies authenticated profile exists with valid UUID', async () => {
+    const [profile] = await db.select().from(profiles).where(eq(profiles.id, userId));
+    expect(profile).toBeDefined();
+    expect(profile.displayName).toBe('E2E Verifier');
   });
 
   it('Step 2 & 3: Ingests alert fixtures, matches accounts, provides category suggestions and duplicate flags', async () => {

@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', 'host.docker.internal', 'postgres']);
 
 export function isLocalDatabaseUrl(urlStr?: string): boolean {
@@ -14,7 +12,7 @@ export function isLocalDatabaseUrl(urlStr?: string): boolean {
 
 /**
  * Hard safety guard to prevent tests or test scripts from reading or modifying
- * a remote database or the project's real `./data` folder.
+ * a remote database.
  *
  * If `NODE_ENV === 'test'` or `VITEST` is set and DATABASE_URL is not local,
  * an error is immediately thrown.
@@ -25,7 +23,6 @@ export function assertTestIsolationGuard(target?: string): void {
         return;
     }
 
-    // Guard against non-local DATABASE_URL
     const dbUrl =
         target && (target.startsWith('postgres://') || target.startsWith('postgresql://'))
             ? target
@@ -41,20 +38,6 @@ export function assertTestIsolationGuard(target?: string): void {
             }
             throw new Error(
                 `[TEST ISOLATION GUARD] Security violation: Test environment must NEVER connect to a non-local database ("${host}"). Tests must use PGlite or a local test database.`
-            );
-        }
-    }
-
-    // Keep check for file paths if target looks like a path
-    if (target && !target.startsWith('postgres://') && !target.startsWith('postgresql://')) {
-        const projectDataDir = path.resolve(process.cwd(), 'data');
-        const resolvedPath = path.resolve(target);
-        const isInsideProjectData =
-            resolvedPath === projectDataDir || resolvedPath.startsWith(projectDataDir + path.sep);
-
-        if (isInsideProjectData) {
-            throw new Error(
-                `[TEST ISOLATION GUARD] Security violation: Test environment must NEVER access project data folder ("${projectDataDir}"). Resolved target: "${resolvedPath}".`
             );
         }
     }

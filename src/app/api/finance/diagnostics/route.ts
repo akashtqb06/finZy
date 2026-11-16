@@ -1,5 +1,4 @@
 import 'server-only';
-import { NextResponse } from 'next/server';
 import { requireUserApi } from '@src/lib/auth/dal';
 import { handleApiError } from '@src/app/api/utils';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -12,10 +11,6 @@ import { getNetWorthHistory } from '@src/lib/finance/db-service/history';
 export async function GET() {
   try {
     const user = await requireUserApi();
-    // Only allow admin or owner role
-    if (user.role !== 'admin' && user.role !== 'owner') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
     const userId = user.id;
 
     const backend = process.env.FINANCE_BACKEND ?? 'db';

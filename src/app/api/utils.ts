@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { BadRequestError, ConflictError, ConnectorError, NotFoundError } from '@src/lib/connectors/types';
-import { UnauthorizedError, ForbiddenError } from '@src/lib/auth/policy';
+import {
+    BadRequestError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    UnauthorizedError,
+} from '@src/lib/auth/policy';
 
-export { BadRequestError, NotFoundError };
-export { ForbiddenError };
+export { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError };
 
 export class TooManyRequestsError extends Error {
     constructor(message = 'Too many requests') {
@@ -21,15 +25,18 @@ export class NotImplementedError extends Error {
 }
 
 export function apiError(message: string, status: number): NextResponse {
-    return NextResponse.json({ error: message }, { status });
+    const res = NextResponse.json({ error: message }, { status });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    return res;
 }
 
 export function handleApiError(err: unknown): NextResponse {
     if (err instanceof NotImplementedError || (err instanceof Error && err.name === 'NotImplementedError')) {
-        // Extract method name from message like "DbFinanceService: listRecurringRules not implemented"
         const methodMatch = (err as Error).message.match(/:\s*(\w+)\s+not implemented/i);
         const method = methodMatch ? methodMatch[1] : (err as Error).message;
-        return NextResponse.json({ error: 'not_implemented', method }, { status: 501 });
+        const res = NextResponse.json({ error: 'not_implemented', method }, { status: 501 });
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return res;
     }
     if (err instanceof UnauthorizedError) {
         return apiError(err.message, 401);
@@ -48,21 +55,12 @@ export function handleApiError(err: unknown): NextResponse {
         return apiError(err.message, 400);
     }
     if (err instanceof NotFoundError) {
-        return apiError(err.message, 404);
+        return apiError('Not found', 404);
     }
     if (err instanceof ConflictError) {
         return apiError(err.message, 409);
     }
-    if (err instanceof ConnectorError) {
-        if (err.code === 'SOURCE_NOT_FOUND') {
-            return apiError(err.message, 404);
-        }
-        if (err.code === 'OPEN_FAILED') {
-            return apiError(err.message, 500);
-        }
-        return apiError(err.message, 422);
-    }
-    // Do not expose internal error details
-    console.error('[API error]', err);
-    return apiError('An internal error occurred', 500);
+
+    console.error('Unhandled API error:', err);
+    return apiError('Internal server error', 500);
 }

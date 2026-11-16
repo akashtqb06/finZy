@@ -121,7 +121,7 @@ export function parseDatabaseError(error: unknown): DatabaseHealthStatus {
  * Startup and health check used by /api/health and page layouts:
  * 1. Verifies connectivity by executing `SELECT 1`.
  * 2. Verifies the migrations table (`drizzle.__drizzle_migrations`) exists and is current.
- * 3. Verifies core required application relations exist (e.g., `public.sessions`).
+ * 3. Verifies core required application relations exist (e.g., `public.profiles`).
  */
 export async function checkDatabaseHealth(): Promise<DatabaseHealthStatus> {
     const connInfo = getDatabaseConnectionInfo();
@@ -137,7 +137,7 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealthStatus> {
     // In isolated in-memory PGlite test environments, if tables exist, health is verified
     if (isPglite()) {
         try {
-            const tableCheck = (await db.execute(sql`SELECT to_regclass('public.sessions') as regclass`)) as {
+            const tableCheck = (await db.execute(sql`SELECT to_regclass('public.profiles') as regclass`)) as {
                 rows?: Array<{ regclass?: string | null }>;
             };
             const regclass = tableCheck.rows?.[0]?.regclass;
@@ -196,8 +196,8 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealthStatus> {
             };
         }
 
-        // Verify public.sessions table exists
-        const sessRes = (await db.execute(sql`SELECT to_regclass('public.sessions') as regclass`)) as {
+        // Verify public.profiles table exists
+        const sessRes = (await db.execute(sql`SELECT to_regclass('public.profiles') as regclass`)) as {
             rows?: Array<{ regclass?: string | null }>;
         };
         const sessRegclass = sessRes.rows?.[0]?.regclass;
@@ -209,7 +209,7 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealthStatus> {
                 message: 'Database is not migrated.',
                 fix: 'pnpm db:migrate',
                 exactFix: 'Database is not migrated. Run pnpm db:migrate',
-                detail: 'Table public.sessions is missing.',
+                detail: 'Table public.profiles is missing.',
                 host: connInfo.host,
                 port: connInfo.port,
             };

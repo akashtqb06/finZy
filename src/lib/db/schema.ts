@@ -1,351 +1,601 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  check,
+  date,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { newId } from './id';
 
-export const users = pgTable(
-    'users',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        email: text('email').notNull(),
-        name: text('name').notNull(),
-        passwordHash: text('password_hash').notNull(),
-        role: text('role').notNull().default('member'),
-        status: text('status').notNull().default('active'),
-        avatarUrl: text('avatar_url'),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        lastLoginAt: timestamp('last_login_at', { withTimezone: true, mode: 'date' }),
-        mustChangePassword: boolean('must_change_password').notNull().default(false),
-    },
-    (table) => [
-        uniqueIndex('users_email_lower_idx').on(sql`lower(${table.email})`),
-    ]
-);
-
-export const sessions = pgTable(
-    'sessions',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        userId: text('user_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        tokenHash: text('token_hash').notNull().unique(),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
-        lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        ipAddress: text('ip_address'),
-        userAgent: text('user_agent'),
-    },
-    (table) => [index('sessions_user_id_idx').on(table.userId)]
-);
-
-export const loginAttempts = pgTable(
-    'login_attempts',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        key: text('key').notNull(),
-        attemptedAt: timestamp('attempted_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        success: boolean('success').notNull().default(false),
-    },
-    (table) => [index('login_attempts_key_attempted_at_idx').on(table.key, table.attemptedAt)]
-);
-
-export const appSettings = pgTable('app_settings', {
-    key: text('key').primaryKey(),
-    value: jsonb('value').notNull().$type<unknown>(),
+// ---------------------------------------------------------------------------
+// profiles (matches Supabase Auth users)
+// ---------------------------------------------------------------------------
+export const profiles = pgTable('profiles', {
+  id: uuid('id').primaryKey(),
+  displayName: text('display_name'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+    .notNull()
+    .defaultNow(),
 });
 
-export const auditLog = pgTable('audit_log', {
+// ---------------------------------------------------------------------------
+// fin_user_settings
+// ---------------------------------------------------------------------------
+export const finUserSettings = pgTable('fin_user_settings', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  baseCurrency: text('base_currency').notNull().default('INR'),
+  timezone: text('timezone').notNull().default('Asia/Kolkata'),
+  weekStartsOn: integer('week_starts_on').notNull().default(1),
+  trackingStartDate: date('tracking_start_date', { mode: 'string' }),
+  includeEpsInNetWorth: boolean('include_eps_in_net_worth').notNull().default(false),
+  includeAccruedInterestInNetWorth: boolean('include_accrued_interest_in_net_worth').notNull().default(false),
+  setupStep: integer('setup_step').notNull().default(1),
+  setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
+  setupSkippedAt: timestamp('setup_skipped_at', { withTimezone: true, mode: 'date' }),
+  draft: jsonb('draft').$type<Record<string, unknown>>(),
+  dataVersion: bigint('data_version', { mode: 'number' }).notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+    .notNull()
+    .defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// fin_accounts
+// ---------------------------------------------------------------------------
+export const finAccounts = pgTable(
+  'fin_accounts',
+  {
     id: text('id')
-        .primaryKey()
-        .$defaultFn(() => newId()),
-    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    action: text('action').notNull(),
-    dataSourceId: text('data_source_id'),
-    host: text('host'),
-    details: jsonb('details').$type<Record<string, unknown>>(),
-    ipAddress: text('ip_address'),
-    at: timestamp('at', { withTimezone: true, mode: 'date' })
-        .notNull()
-        .defaultNow(),
-});
-
-export const dataSources = pgTable(
-    'data_sources',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        ownerId: text('owner_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        name: text('name').notNull(),
-        slug: text('slug').unique(),
-        type: text('type').notNull(),
-        config: jsonb('config').notNull().$type<Record<string, unknown>>().default(sql`'{}'::jsonb`), // JSON — encrypted secrets where applicable
-        status: text('status', { enum: ['unknown', 'ok', 'error'] })
-            .notNull()
-            .default('unknown'),
-        lastTestedAt: timestamp('last_tested_at', { withTimezone: true, mode: 'date' }),
-        lastError: text('last_error'),
-        serverVersion: text('server_version'),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [index('data_sources_owner_id_idx').on(table.ownerId)]
-);
-
-export const schemaCache = pgTable('schema_cache', {
-    dataSourceId: text('data_source_id')
-        .primaryKey()
-        .references(() => dataSources.id, { onDelete: 'cascade' }),
-    snapshot: jsonb('snapshot').notNull().$type<unknown>(), // JSON SchemaSnapshot
-    fetchedAt: timestamp('fetched_at', { withTimezone: true, mode: 'date' })
-        .notNull()
-        .defaultNow(),
-});
-
-export const workbooks = pgTable(
-    'workbooks',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        ownerId: text('owner_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        name: text('name').notNull(),
-        slug: text('slug').unique(),
-        description: text('description').notNull().default(''),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [index('workbooks_owner_id_idx').on(table.ownerId)]
-);
-
-export const folders = pgTable(
-    'folders',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        workbookId: text('workbook_id')
-            .notNull()
-            .references(() => workbooks.id, { onDelete: 'cascade' }),
-        kind: text('kind', { enum: ['query', 'chart', 'dashboard'] }).notNull(),
-        name: text('name').notNull(),
-        parentId: text('parent_id'),
-        position: integer('position').notNull().default(0),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [
-        index('folders_workbook_id_kind_idx').on(table.workbookId, table.kind),
-        uniqueIndex('folders_workbook_id_kind_name_idx').on(table.workbookId, table.kind, table.name),
-    ]
-);
-
-export const queries = pgTable(
-    'queries',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        workbookId: text('workbook_id')
-            .notNull()
-            .references(() => workbooks.id, { onDelete: 'cascade' }),
-        name: text('name').notNull(),
-        dataSourceId: text('data_source_id')
-            .notNull()
-            .references(() => dataSources.id, { onDelete: 'cascade' }),
-        mode: text('mode', { enum: ['builder', 'sql', 'pipeline'] })
-            .notNull()
-            .default('sql'),
-        definition: jsonb('definition').notNull().$type<unknown>().default(sql`'[]'::jsonb`), // JSON builder steps
-        sql: text('sql').notNull().default(''),
-        folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
-        position: integer('position').notNull().default(0),
-        createdBy: text('created_by'),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [
-        index('queries_workbook_id_idx').on(table.workbookId),
-        index('queries_data_source_id_idx').on(table.dataSourceId),
-        index('queries_folder_id_idx').on(table.folderId),
-    ]
-);
-
-export const charts = pgTable(
-    'charts',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        workbookId: text('workbook_id')
-            .notNull()
-            .references(() => workbooks.id, { onDelete: 'cascade' }),
-        queryId: text('query_id')
-            .notNull()
-            .references(() => queries.id, { onDelete: 'cascade' }),
-        name: text('name').notNull(),
-        type: text('type', {
-            enum: ['bar', 'line', 'row', 'donut', 'pie', 'area', 'number', 'table'],
-        }).notNull(),
-        config: jsonb('config').notNull().$type<unknown>().default(sql`'{}'::jsonb`), // JSON — validated via json-helpers
-        folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
-        position: integer('position').notNull().default(0),
-        createdBy: text('created_by'),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [
-        index('charts_workbook_id_idx').on(table.workbookId),
-        index('charts_query_id_idx').on(table.queryId),
-        index('charts_folder_id_idx').on(table.folderId),
-    ]
-);
-
-export const dashboards = pgTable(
-    'dashboards',
-    {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => newId()),
-        workbookId: text('workbook_id')
-            .notNull()
-            .references(() => workbooks.id, { onDelete: 'cascade' }),
-        ownerId: text('owner_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        name: text('name').notNull(),
-        slug: text('slug').unique(),
-        layout: jsonb('layout').notNull().$type<unknown>().default(sql`'[]'::jsonb`), // JSON react-grid-layout items
-        filters: jsonb('filters').notNull().$type<unknown>().default(sql`'[]'::jsonb`), // JSON dashboard filters
-        autoRefresh: text('auto_refresh').notNull().default('off'),
-        folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
-        position: integer('position').notNull().default(0),
-        createdBy: text('created_by')
-            .references(() => users.id, { onDelete: 'set null' }),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [
-        index('dashboards_owner_id_idx').on(table.ownerId),
-        index('dashboards_workbook_id_idx').on(table.workbookId),
-        index('dashboards_folder_id_idx').on(table.folderId),
-    ]
-);
-
-export const dashboardFavorites = pgTable(
-    'dashboard_favorites',
-    {
-        userId: text('user_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        dashboardId: text('dashboard_id')
-            .notNull()
-            .references(() => dashboards.id, { onDelete: 'cascade' }),
-        createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
-            .notNull()
-            .defaultNow(),
-    },
-    (table) => [
-        primaryKey({ columns: [table.userId, table.dashboardId] }),
-        index('dashboard_favorites_user_id_idx').on(table.userId),
-        index('dashboard_favorites_dashboard_id_idx').on(table.dashboardId),
-    ]
-);
-
-export const dashboardViews = pgTable(
-    'dashboard_views',
-    {
-        userId: text('user_id')
-            .notNull()
-            .references(() => users.id, { onDelete: 'cascade' }),
-        dashboardId: text('dashboard_id')
-            .notNull()
-            .references(() => dashboards.id, { onDelete: 'cascade' }),
-        viewCount: integer('view_count').notNull().default(0),
-        lastViewedAt: timestamp('last_viewed_at', { withTimezone: true, mode: 'date' }),
-    },
-    (table) => [
-        primaryKey({ columns: [table.userId, table.dashboardId] }),
-        index('dashboard_views_user_id_idx').on(table.userId),
-        index('dashboard_views_dashboard_id_idx').on(table.dashboardId),
-    ]
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind', {
+      enum: [
+        'cash',
+        'bank',
+        'wallet',
+        'credit_card',
+        'fixed_deposit',
+        'recurring_deposit',
+        'mutual_fund',
+        'stocks',
+        'loan',
+        'other_asset',
+        'other_liability',
+        'epf',
+        'vpf',
+        'ppf',
+        'nps',
+      ],
+    }).notNull(),
+    class: text('class', {
+      enum: ['asset', 'liability'],
+    }).notNull(),
+    currency: text('currency').notNull().default('INR'),
+    creditLimit: bigint('credit_limit', { mode: 'number' }),
+    isActive: boolean('is_active').notNull().default(true),
+    metadata: jsonb('metadata')
+      .notNull()
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_accounts_user_id_idx').on(table.userId),
+    index('fin_accounts_user_kind_idx').on(table.userId, table.kind),
+    index('fin_accounts_user_active_idx').on(table.userId, table.isActive),
+  ]
 );
 
 // ---------------------------------------------------------------------------
-// Inferred types
+// fin_categories
 // ---------------------------------------------------------------------------
-export type DataSource = typeof dataSources.$inferSelect;
-export type InsertDataSource = typeof dataSources.$inferInsert;
-export type SchemaCache = typeof schemaCache.$inferSelect;
-export type InsertSchemaCache = typeof schemaCache.$inferInsert;
-export type Workbook = typeof workbooks.$inferSelect;
-export type InsertWorkbook = typeof workbooks.$inferInsert;
-export type Folder = typeof folders.$inferSelect;
-export type InsertFolder = typeof folders.$inferInsert;
-export type Query = typeof queries.$inferSelect;
-export type InsertQuery = typeof queries.$inferInsert;
-export type Chart = typeof charts.$inferSelect;
-export type InsertChart = typeof charts.$inferInsert;
-export type Dashboard = typeof dashboards.$inferSelect;
-export type InsertDashboard = typeof dashboards.$inferInsert;
-export type DashboardFavorite = typeof dashboardFavorites.$inferSelect;
-export type InsertDashboardFavorite = typeof dashboardFavorites.$inferInsert;
-export type DashboardView = typeof dashboardViews.$inferSelect;
-export type InsertDashboardView = typeof dashboardViews.$inferInsert;
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-export type Session = typeof sessions.$inferSelect;
-export type InsertSession = typeof sessions.$inferInsert;
-export type LoginAttempt = typeof loginAttempts.$inferSelect;
-export type AppSetting = typeof appSettings.$inferSelect;
-export type AuditLogEntry = typeof auditLog.$inferSelect;
-export type InsertAuditLogEntry = typeof auditLog.$inferInsert;
+export const finCategories = pgTable(
+  'fin_categories',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id').references(() => profiles.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    type: text('type', {
+      enum: ['expense', 'income'],
+    }).notNull(),
+    parentId: text('parent_id'),
+    icon: text('icon'),
+    color: text('color'),
+    isSystem: boolean('is_system').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_categories_user_id_idx').on(table.userId),
+    index('fin_categories_user_type_idx').on(table.userId, table.type),
+  ]
+);
 
-export * from './schema/data-store';
-export * from './schema/automation';
+// ---------------------------------------------------------------------------
+// fin_transactions
+// ---------------------------------------------------------------------------
+export const finTransactions = pgTable(
+  'fin_transactions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => finAccounts.id, { onDelete: 'cascade' }),
+    toAccountId: text('to_account_id').references(() => finAccounts.id, { onDelete: 'set null' }),
+    categoryId: text('category_id').references(() => finCategories.id, { onDelete: 'set null' }),
+    date: date('date', { mode: 'string' }).notNull(),
+    type: text('type', {
+      enum: ['expense', 'income', 'transfer', 'adjustment'],
+    }).notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    signedAmount: bigint('signed_amount', { mode: 'number' }).notNull(),
+    payee: text('payee'),
+    note: text('note'),
+    tags: text('tags'),
+    clientRequestId: text('client_request_id'),
+    importHash: text('import_hash'),
+    isRecurring: boolean('is_recurring').notNull().default(false),
+    recurringRuleId: text('recurring_rule_id'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_transactions_user_date_idx').on(table.userId, table.date),
+    index('fin_transactions_account_date_idx').on(table.accountId, table.date),
+    index('fin_transactions_user_category_idx').on(table.userId, table.categoryId),
+    uniqueIndex('fin_transactions_user_client_req_idx')
+      .on(table.userId, table.clientRequestId)
+      .where(sql`${table.clientRequestId} IS NOT NULL`),
+    uniqueIndex('fin_transactions_user_import_hash_idx')
+      .on(table.userId, table.importHash)
+      .where(sql`${table.importHash} IS NOT NULL`),
+    check(
+      'fin_transactions_amount_check',
+      sql`${table.type} = 'adjustment' OR ${table.amount} > 0`
+    ),
+    check(
+      'fin_transactions_transfer_check',
+      sql`${table.type} <> 'transfer' OR (${table.toAccountId} IS NOT NULL AND ${table.toAccountId} <> ${table.accountId})`
+    ),
+  ]
+);
 
+// ---------------------------------------------------------------------------
+// fin_valuations
+// ---------------------------------------------------------------------------
+export const finValuations = pgTable(
+  'fin_valuations',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => finAccounts.id, { onDelete: 'cascade' }),
+    date: date('date', { mode: 'string' }).notNull(),
+    value: bigint('value', { mode: 'number' }).notNull(),
+    costBasis: bigint('cost_basis', { mode: 'number' }),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('fin_valuations_account_date_idx').on(table.accountId, table.date),
+    index('fin_valuations_account_id_idx').on(table.accountId),
+    index('fin_valuations_user_id_idx').on(table.userId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fin_budgets
+// ---------------------------------------------------------------------------
+export const finBudgets = pgTable(
+  'fin_budgets',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    categoryId: text('category_id')
+      .notNull()
+      .references(() => finCategories.id, { onDelete: 'cascade' }),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    period: text('period', {
+      enum: ['monthly', 'quarterly', 'yearly'],
+    })
+      .notNull()
+      .default('monthly'),
+    startDate: date('start_date', { mode: 'string' }).notNull(),
+    endDate: date('end_date', { mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_budgets_user_id_idx').on(table.userId),
+    index('fin_budgets_user_category_idx').on(table.userId, table.categoryId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fin_recurring_rules
+// ---------------------------------------------------------------------------
+export const finRecurringRules = pgTable(
+  'fin_recurring_rules',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => finAccounts.id, { onDelete: 'cascade' }),
+    toAccountId: text('to_account_id').references(() => finAccounts.id, { onDelete: 'set null' }),
+    categoryId: text('category_id').references(() => finCategories.id, { onDelete: 'set null' }),
+    type: text('type', {
+      enum: ['expense', 'income', 'transfer'],
+    }).notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    payee: text('payee'),
+    note: text('note'),
+    frequency: text('frequency', {
+      enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
+    }).notNull(),
+    interval: integer('interval').notNull().default(1),
+    startDate: date('start_date', { mode: 'string' }).notNull(),
+    endDate: date('end_date', { mode: 'string' }),
+    nextOccurrence: date('next_occurrence', { mode: 'string' }).notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_recurring_user_id_idx').on(table.userId),
+    index('fin_recurring_active_next_idx').on(table.userId, table.isActive, table.nextOccurrence),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fin_pf_entries
+// ---------------------------------------------------------------------------
+export const finPfEntries = pgTable(
+  'fin_pf_entries',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => finAccounts.id, { onDelete: 'cascade' }),
+    entryKind: text('entry_kind', {
+      enum: [
+        'opening',
+        'contribution',
+        'transfer_in_principal',
+        'transfer_in_interest',
+        'interest_credit',
+        'withdrawal',
+      ],
+    }).notNull(),
+    periodMonth: text('period_month'),
+    postedDate: date('posted_date', { mode: 'string' }),
+    dateApprox: boolean('date_approx').notNull().default(false),
+    epfWages: bigint('epf_wages', { mode: 'number' }).notNull().default(0),
+    epsWages: bigint('eps_wages', { mode: 'number' }).notNull().default(0),
+    employeeAmount: bigint('employee_amount', { mode: 'number' }).notNull().default(0),
+    employerAmount: bigint('employer_amount', { mode: 'number' }).notNull().default(0),
+    pensionAmount: bigint('pension_amount', { mode: 'number' }).notNull().default(0),
+    sourceLabel: text('source_label'),
+    passbookKey: text('passbook_key').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('fin_pf_entries_account_passbook_key_unique').on(table.accountId, table.passbookKey),
+    index('fin_pf_entries_user_account_idx').on(table.userId, table.accountId),
+    index('fin_pf_entries_account_period_idx').on(table.accountId, table.periodMonth),
+    index('fin_pf_entries_account_date_idx').on(table.accountId, table.postedDate),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fin_inbox
+// ---------------------------------------------------------------------------
+export const finInbox = pgTable(
+  'fin_inbox',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    source: text('source', {
+      enum: ['email', 'sms', 'api', 'n8n'],
+    }).notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true, mode: 'date' }).notNull(),
+    date: date('date', { mode: 'string' }).notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    direction: text('direction', {
+      enum: ['debit', 'credit'],
+    }).notNull(),
+    currency: text('currency').notNull().default('INR'),
+    merchant: text('merchant'),
+    description: text('description'),
+    accountHint: jsonb('account_hint').$type<{ last4?: string; name?: string } | null>(),
+    reference: text('reference'),
+    raw: text('raw'),
+    status: text('status', {
+      enum: ['pending', 'approved', 'rejected', 'duplicate'],
+    })
+      .notNull()
+      .default('pending'),
+    matchedAccountId: text('matched_account_id').references(() => finAccounts.id, {
+      onDelete: 'set null',
+    }),
+    suggestedCategoryId: text('suggested_category_id').references(() => finCategories.id, {
+      onDelete: 'set null',
+    }),
+    duplicateWarning: jsonb('duplicate_warning').$type<
+      Array<{ reason: string; existingId?: string }>
+    >(),
+    importHash: text('import_hash'),
+    createdTransactionId: text('created_transaction_id').references(
+      () => finTransactions.id,
+      { onDelete: 'set null' }
+    ),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_inbox_user_status_idx').on(table.userId, table.status),
+    uniqueIndex('fin_inbox_user_idempotency_key_idx').on(table.userId, table.idempotencyKey),
+    uniqueIndex('fin_inbox_user_import_hash_idx')
+      .on(table.userId, table.importHash)
+      .where(sql`${table.importHash} IS NOT NULL`),
+    index('fin_inbox_user_id_idx').on(table.userId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fin_reconciliations
+// ---------------------------------------------------------------------------
+export const finReconciliations = pgTable(
+  'fin_reconciliations',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => finAccounts.id, { onDelete: 'cascade' }),
+    statementDate: date('statement_date', { mode: 'string' }).notNull(),
+    statementBalance: bigint('statement_balance', { mode: 'number' }).notNull(),
+    clearedBalance: bigint('cleared_balance', { mode: 'number' }).notNull().default(0),
+    difference: bigint('difference', { mode: 'number' }).notNull().default(0),
+    status: text('status', {
+      enum: ['pending', 'reconciled'],
+    })
+      .notNull()
+      .default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_reconciliations_user_id_idx').on(table.userId),
+    index('fin_reconciliations_account_date_idx').on(table.accountId, table.statementDate),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// payee_rules
+// ---------------------------------------------------------------------------
+export const payeeRules = pgTable(
+  'payee_rules',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    payeePattern: text('payee_pattern').notNull(),
+    categoryId: text('category_id')
+      .notNull()
+      .references(() => finCategories.id, { onDelete: 'cascade' }),
+    priority: integer('priority').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('payee_rules_user_id_idx').on(table.userId),
+    uniqueIndex('payee_rules_user_payee_pattern_idx').on(table.userId, table.payeePattern),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// webhook_endpoints
+// ---------------------------------------------------------------------------
+export const webhookEndpoints = pgTable(
+  'webhook_endpoints',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    secretHash: text('secret_hash').notNull(),
+    events: text('events').array().notNull().default(sql`'{}'::text[]`),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index('webhook_endpoints_user_id_idx').on(table.userId)]
+);
+
+// ---------------------------------------------------------------------------
+// webhook_deliveries
+// ---------------------------------------------------------------------------
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    endpointId: text('endpoint_id')
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    payload: jsonb('payload').notNull().$type<Record<string, unknown>>(),
+    status: text('status', {
+      enum: ['pending', 'success', 'failed'],
+    })
+      .notNull()
+      .default('pending'),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true, mode: 'date' }),
+    responseStatus: integer('response_status'),
+    responseBody: text('response_body'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('webhook_deliveries_endpoint_status_idx').on(table.endpointId, table.status),
+    index('webhook_deliveries_status_next_attempt_idx').on(table.status, table.nextAttemptAt),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// Inferred TypeScript domain types
+// ---------------------------------------------------------------------------
+export type Profile = typeof profiles.$inferSelect;
+export type NewProfile = typeof profiles.$inferInsert;
+
+export type FinUserSettings = typeof finUserSettings.$inferSelect;
+export type NewFinUserSettings = typeof finUserSettings.$inferInsert;
+
+export type FinAccount = typeof finAccounts.$inferSelect;
+export type NewFinAccount = typeof finAccounts.$inferInsert;
+
+export type FinCategory = typeof finCategories.$inferSelect;
+export type NewFinCategory = typeof finCategories.$inferInsert;
+
+export type FinTransaction = typeof finTransactions.$inferSelect;
+export type NewFinTransaction = typeof finTransactions.$inferInsert;
+
+export type FinValuation = typeof finValuations.$inferSelect;
+export type NewFinValuation = typeof finValuations.$inferInsert;
+
+export type FinBudget = typeof finBudgets.$inferSelect;
+export type NewFinBudget = typeof finBudgets.$inferInsert;
+
+export type FinRecurringRule = typeof finRecurringRules.$inferSelect;
+export type NewFinRecurringRule = typeof finRecurringRules.$inferInsert;
+
+export type FinPfEntry = typeof finPfEntries.$inferSelect;
+export type NewFinPfEntry = typeof finPfEntries.$inferInsert;
+
+export type FinInbox = typeof finInbox.$inferSelect;
+export type NewFinInbox = typeof finInbox.$inferInsert;
+
+export type FinReconciliation = typeof finReconciliations.$inferSelect;
+export type NewFinReconciliation = typeof finReconciliations.$inferInsert;
+
+export type PayeeRule = typeof payeeRules.$inferSelect;
+export type NewPayeeRule = typeof payeeRules.$inferInsert;
+
+export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
+export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
+
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;

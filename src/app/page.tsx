@@ -11,7 +11,7 @@ async function HomeRedirect(): Promise<null> {
       redirect('/finance/setup');
     }
   }
-  redirect('/workbooks');
+  redirect('/finance/overview');
 }
 
 export default function HomePage() {

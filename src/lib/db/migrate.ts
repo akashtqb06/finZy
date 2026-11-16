@@ -35,6 +35,23 @@ export async function runMigrations(): Promise<void> {
             `);
         }
         await migratePglite(activeDb as PgliteDatabase<typeof schema>, { migrationsFolder: MIGRATIONS_DIR });
+
+        // Auto-populate auth.users stub on profile insert in PGlite test environments
+        if (pglite) {
+            await pglite.exec(`
+                CREATE OR REPLACE FUNCTION auth.sync_stub_user() RETURNS trigger AS $$
+                BEGIN
+                    INSERT INTO auth.users (id) VALUES (NEW.id) ON CONFLICT (id) DO NOTHING;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+
+                DROP TRIGGER IF EXISTS tr_profiles_sync_stub_user ON public.profiles;
+                CREATE TRIGGER tr_profiles_sync_stub_user
+                BEFORE INSERT ON public.profiles
+                FOR EACH ROW EXECUTE FUNCTION auth.sync_stub_user();
+            `);
+        }
     } else {
         await migratePg(activeDb as NodePgDatabase<typeof schema>, { migrationsFolder: MIGRATIONS_DIR });
     }

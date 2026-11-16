@@ -18,7 +18,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { cn } from 'cn';
-import { getAvatarColor } from '@src/components/settings/profile-form';
+
+function getAvatarColor(id: string): string {
+    const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500'];
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = (hash << 5) - hash + id.charCodeAt(i);
+        hash |= 0;
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -57,7 +66,7 @@ export function UserMenu({
     const avatar = (
         <Avatar className="size-8">
             <AvatarImage src={user.avatarUrl ?? undefined} alt="" />
-            <AvatarFallback className={cn('text-xs font-medium', getAvatarColor(user.id))}>{initials(user.name)}</AvatarFallback>
+            <AvatarFallback className={cn('text-xs font-medium', getAvatarColor(user.id))}>{initials(user.name ?? 'U')}</AvatarFallback>
         </Avatar>
     );
 

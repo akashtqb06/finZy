@@ -1,11 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { LoginForm } from './login-form';
-import { isRegistrationAllowed } from '@src/lib/auth/registration';
 import { getCurrentUser } from '@src/lib/auth/dal';
-import { getPublicSettings } from '@src/lib/settings/app-settings';
-import { checkDatabaseHealth } from '@src/lib/db/health';
-import { DatabaseErrorPage } from '@src/components/db/database-error-page';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -14,26 +10,13 @@ type LoginPageProps = {
 };
 
 async function LoginPageContent({ searchParams }: LoginPageProps) {
-    const health = await checkDatabaseHealth();
-    if (!health.ok) {
-        return <DatabaseErrorPage health={health} />;
-    }
-
-    const [user, params, allowRegistration, { appName }] = await Promise.all([
-        getCurrentUser(),
-        searchParams,
-        isRegistrationAllowed(),
-        getPublicSettings().catch(() => ({ appName: 'BI Kit' })),
-    ]);
+    const [user, params] = await Promise.all([getCurrentUser(), searchParams]);
     if (user) {
-        if (user.mustChangePassword) {
-            redirect('/settings/security?forced=true');
-        }
         redirect('/');
     }
     const next = typeof params.next === 'string' ? params.next : '/';
 
-    return <LoginForm next={next} allowRegistration={allowRegistration} appName={appName} />;
+    return <LoginForm next={next} />;
 }
 
 function LoginFormSkeleton() {
@@ -41,7 +24,7 @@ function LoginFormSkeleton() {
         <Card className="w-full max-w-sm">
             <CardHeader>
                 <CardTitle>Welcome back</CardTitle>
-                <CardDescription>Sign in to continue to BI Kit.</CardDescription>
+                <CardDescription>Sign in to your Finzy personal finance workspace.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">

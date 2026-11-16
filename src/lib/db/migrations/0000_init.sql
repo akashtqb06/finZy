@@ -1,191 +1,270 @@
-CREATE TABLE "app_settings" (
-	"key" text PRIMARY KEY NOT NULL,
-	"value" jsonb NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "audit_log" (
+CREATE TABLE "fin_accounts" (
 	"id" text PRIMARY KEY NOT NULL,
-	"user_id" text,
-	"action" text NOT NULL,
-	"data_source_id" text,
-	"host" text,
-	"at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "charts" (
-	"id" text PRIMARY KEY NOT NULL,
-	"workbook_id" text NOT NULL,
-	"query_id" text NOT NULL,
+	"user_id" uuid NOT NULL,
 	"name" text NOT NULL,
-	"type" text NOT NULL,
-	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"folder_id" text,
-	"position" integer DEFAULT 0 NOT NULL,
-	"created_by" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "dashboard_favorites" (
-	"user_id" text NOT NULL,
-	"dashboard_id" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "dashboard_favorites_user_id_dashboard_id_pk" PRIMARY KEY("user_id","dashboard_id")
-);
---> statement-breakpoint
-CREATE TABLE "dashboard_views" (
-	"user_id" text NOT NULL,
-	"dashboard_id" text NOT NULL,
-	"view_count" integer DEFAULT 0 NOT NULL,
-	"last_viewed_at" timestamp with time zone,
-	CONSTRAINT "dashboard_views_user_id_dashboard_id_pk" PRIMARY KEY("user_id","dashboard_id")
-);
---> statement-breakpoint
-CREATE TABLE "dashboards" (
-	"id" text PRIMARY KEY NOT NULL,
-	"workbook_id" text NOT NULL,
-	"owner_id" text NOT NULL,
-	"name" text NOT NULL,
-	"slug" text,
-	"layout" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"filters" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"auto_refresh" text DEFAULT 'off' NOT NULL,
-	"folder_id" text,
-	"position" integer DEFAULT 0 NOT NULL,
-	"created_by" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "dashboards_slug_unique" UNIQUE("slug")
-);
---> statement-breakpoint
-CREATE TABLE "data_sources" (
-	"id" text PRIMARY KEY NOT NULL,
-	"owner_id" text NOT NULL,
-	"name" text NOT NULL,
-	"slug" text,
-	"type" text NOT NULL,
-	"config" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"status" text DEFAULT 'unknown' NOT NULL,
-	"last_tested_at" timestamp with time zone,
-	"last_error" text,
-	"server_version" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "data_sources_slug_unique" UNIQUE("slug")
-);
---> statement-breakpoint
-CREATE TABLE "folders" (
-	"id" text PRIMARY KEY NOT NULL,
-	"workbook_id" text NOT NULL,
 	"kind" text NOT NULL,
+	"class" text NOT NULL,
+	"currency" text DEFAULT 'INR' NOT NULL,
+	"credit_limit" bigint,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "fin_budgets" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"category_id" text NOT NULL,
+	"amount" bigint NOT NULL,
+	"period" text DEFAULT 'monthly' NOT NULL,
+	"start_date" date NOT NULL,
+	"end_date" date,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "fin_categories" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid,
 	"name" text NOT NULL,
+	"type" text NOT NULL,
 	"parent_id" text,
-	"position" integer DEFAULT 0 NOT NULL,
+	"icon" text,
+	"color" text,
+	"is_system" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "login_attempts" (
+CREATE TABLE "fin_inbox" (
 	"id" text PRIMARY KEY NOT NULL,
-	"key" text NOT NULL,
-	"attempted_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"success" boolean DEFAULT false NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "queries" (
-	"id" text PRIMARY KEY NOT NULL,
-	"workbook_id" text NOT NULL,
-	"name" text NOT NULL,
-	"data_source_id" text NOT NULL,
-	"mode" text DEFAULT 'sql' NOT NULL,
-	"definition" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"sql" text DEFAULT '' NOT NULL,
-	"folder_id" text,
-	"position" integer DEFAULT 0 NOT NULL,
-	"created_by" text,
+	"user_id" uuid NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"source" text NOT NULL,
+	"received_at" timestamp with time zone NOT NULL,
+	"date" date NOT NULL,
+	"amount" bigint NOT NULL,
+	"direction" text NOT NULL,
+	"currency" text DEFAULT 'INR' NOT NULL,
+	"merchant" text,
+	"description" text,
+	"account_hint" jsonb,
+	"reference" text,
+	"raw" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"matched_account_id" text,
+	"suggested_category_id" text,
+	"duplicate_warning" jsonb,
+	"import_hash" text,
+	"created_transaction_id" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "schema_cache" (
-	"data_source_id" text PRIMARY KEY NOT NULL,
-	"snapshot" jsonb NOT NULL,
-	"fetched_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "sessions" (
+CREATE TABLE "fin_pf_entries" (
 	"id" text PRIMARY KEY NOT NULL,
-	"user_id" text NOT NULL,
-	"token_hash" text NOT NULL,
+	"user_id" uuid NOT NULL,
+	"account_id" text NOT NULL,
+	"entry_kind" text NOT NULL,
+	"period_month" text,
+	"posted_date" date,
+	"date_approx" boolean DEFAULT false NOT NULL,
+	"epf_wages" bigint DEFAULT 0 NOT NULL,
+	"eps_wages" bigint DEFAULT 0 NOT NULL,
+	"employee_amount" bigint DEFAULT 0 NOT NULL,
+	"employer_amount" bigint DEFAULT 0 NOT NULL,
+	"pension_amount" bigint DEFAULT 0 NOT NULL,
+	"source_label" text,
+	"passbook_key" text NOT NULL,
+	"note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL,
-	"last_used_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"ip_address" text,
-	"user_agent" text,
-	CONSTRAINT "sessions_token_hash_unique" UNIQUE("token_hash")
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "users" (
+CREATE TABLE "fin_reconciliations" (
 	"id" text PRIMARY KEY NOT NULL,
-	"email" text NOT NULL,
-	"name" text NOT NULL,
-	"password_hash" text NOT NULL,
-	"role" text DEFAULT 'member' NOT NULL,
-	"status" text DEFAULT 'active' NOT NULL,
-	"avatar_url" text,
+	"user_id" uuid NOT NULL,
+	"account_id" text NOT NULL,
+	"statement_date" date NOT NULL,
+	"statement_balance" bigint NOT NULL,
+	"cleared_balance" bigint DEFAULT 0 NOT NULL,
+	"difference" bigint DEFAULT 0 NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "fin_recurring_rules" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"account_id" text NOT NULL,
+	"to_account_id" text,
+	"category_id" text,
+	"type" text NOT NULL,
+	"amount" bigint NOT NULL,
+	"payee" text,
+	"note" text,
+	"frequency" text NOT NULL,
+	"interval" integer DEFAULT 1 NOT NULL,
+	"start_date" date NOT NULL,
+	"end_date" date,
+	"next_occurrence" date NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "fin_transactions" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"account_id" text NOT NULL,
+	"to_account_id" text,
+	"category_id" text,
+	"date" date NOT NULL,
+	"type" text NOT NULL,
+	"amount" bigint NOT NULL,
+	"signed_amount" bigint NOT NULL,
+	"payee" text,
+	"note" text,
+	"tags" text,
+	"client_request_id" text,
+	"import_hash" text,
+	"is_recurring" boolean DEFAULT false NOT NULL,
+	"recurring_rule_id" text,
+	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"last_login_at" timestamp with time zone
+	CONSTRAINT "fin_transactions_amount_check" CHECK ("fin_transactions"."type" = 'adjustment' OR "fin_transactions"."amount" > 0),
+	CONSTRAINT "fin_transactions_transfer_check" CHECK ("fin_transactions"."type" <> 'transfer' OR ("fin_transactions"."to_account_id" IS NOT NULL AND "fin_transactions"."to_account_id" <> "fin_transactions"."account_id"))
 );
 --> statement-breakpoint
-CREATE TABLE "workbooks" (
-	"id" text PRIMARY KEY NOT NULL,
-	"owner_id" text NOT NULL,
-	"name" text NOT NULL,
-	"slug" text,
-	"description" text DEFAULT '' NOT NULL,
+CREATE TABLE "fin_user_settings" (
+	"user_id" uuid PRIMARY KEY NOT NULL,
+	"base_currency" text DEFAULT 'INR' NOT NULL,
+	"timezone" text DEFAULT 'Asia/Kolkata' NOT NULL,
+	"week_starts_on" integer DEFAULT 1 NOT NULL,
+	"tracking_start_date" date,
+	"include_eps_in_net_worth" boolean DEFAULT false NOT NULL,
+	"include_accrued_interest_in_net_worth" boolean DEFAULT false NOT NULL,
+	"setup_step" integer DEFAULT 1 NOT NULL,
+	"setup_completed_at" timestamp with time zone,
+	"setup_skipped_at" timestamp with time zone,
+	"draft" jsonb,
+	"data_version" bigint DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "workbooks_slug_unique" UNIQUE("slug")
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charts" ADD CONSTRAINT "charts_workbook_id_workbooks_id_fk" FOREIGN KEY ("workbook_id") REFERENCES "public"."workbooks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charts" ADD CONSTRAINT "charts_query_id_queries_id_fk" FOREIGN KEY ("query_id") REFERENCES "public"."queries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "charts" ADD CONSTRAINT "charts_folder_id_folders_id_fk" FOREIGN KEY ("folder_id") REFERENCES "public"."folders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboard_favorites" ADD CONSTRAINT "dashboard_favorites_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboard_favorites" ADD CONSTRAINT "dashboard_favorites_dashboard_id_dashboards_id_fk" FOREIGN KEY ("dashboard_id") REFERENCES "public"."dashboards"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboard_views" ADD CONSTRAINT "dashboard_views_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboard_views" ADD CONSTRAINT "dashboard_views_dashboard_id_dashboards_id_fk" FOREIGN KEY ("dashboard_id") REFERENCES "public"."dashboards"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboards" ADD CONSTRAINT "dashboards_workbook_id_workbooks_id_fk" FOREIGN KEY ("workbook_id") REFERENCES "public"."workbooks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboards" ADD CONSTRAINT "dashboards_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboards" ADD CONSTRAINT "dashboards_folder_id_folders_id_fk" FOREIGN KEY ("folder_id") REFERENCES "public"."folders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "dashboards" ADD CONSTRAINT "dashboards_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "data_sources" ADD CONSTRAINT "data_sources_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "folders" ADD CONSTRAINT "folders_workbook_id_workbooks_id_fk" FOREIGN KEY ("workbook_id") REFERENCES "public"."workbooks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "queries" ADD CONSTRAINT "queries_workbook_id_workbooks_id_fk" FOREIGN KEY ("workbook_id") REFERENCES "public"."workbooks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "queries" ADD CONSTRAINT "queries_data_source_id_data_sources_id_fk" FOREIGN KEY ("data_source_id") REFERENCES "public"."data_sources"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "queries" ADD CONSTRAINT "queries_folder_id_folders_id_fk" FOREIGN KEY ("folder_id") REFERENCES "public"."folders"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "schema_cache" ADD CONSTRAINT "schema_cache_data_source_id_data_sources_id_fk" FOREIGN KEY ("data_source_id") REFERENCES "public"."data_sources"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "workbooks" ADD CONSTRAINT "workbooks_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "charts_workbook_id_idx" ON "charts" USING btree ("workbook_id");--> statement-breakpoint
-CREATE INDEX "charts_query_id_idx" ON "charts" USING btree ("query_id");--> statement-breakpoint
-CREATE INDEX "charts_folder_id_idx" ON "charts" USING btree ("folder_id");--> statement-breakpoint
-CREATE INDEX "dashboard_favorites_user_id_idx" ON "dashboard_favorites" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "dashboard_favorites_dashboard_id_idx" ON "dashboard_favorites" USING btree ("dashboard_id");--> statement-breakpoint
-CREATE INDEX "dashboard_views_user_id_idx" ON "dashboard_views" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "dashboard_views_dashboard_id_idx" ON "dashboard_views" USING btree ("dashboard_id");--> statement-breakpoint
-CREATE INDEX "dashboards_owner_id_idx" ON "dashboards" USING btree ("owner_id");--> statement-breakpoint
-CREATE INDEX "dashboards_workbook_id_idx" ON "dashboards" USING btree ("workbook_id");--> statement-breakpoint
-CREATE INDEX "dashboards_folder_id_idx" ON "dashboards" USING btree ("folder_id");--> statement-breakpoint
-CREATE INDEX "data_sources_owner_id_idx" ON "data_sources" USING btree ("owner_id");--> statement-breakpoint
-CREATE INDEX "folders_workbook_id_kind_idx" ON "folders" USING btree ("workbook_id","kind");--> statement-breakpoint
-CREATE UNIQUE INDEX "folders_workbook_id_kind_name_idx" ON "folders" USING btree ("workbook_id","kind","name");--> statement-breakpoint
-CREATE INDEX "login_attempts_key_attempted_at_idx" ON "login_attempts" USING btree ("key","attempted_at");--> statement-breakpoint
-CREATE INDEX "queries_workbook_id_idx" ON "queries" USING btree ("workbook_id");--> statement-breakpoint
-CREATE INDEX "queries_data_source_id_idx" ON "queries" USING btree ("data_source_id");--> statement-breakpoint
-CREATE INDEX "queries_folder_id_idx" ON "queries" USING btree ("folder_id");--> statement-breakpoint
-CREATE INDEX "sessions_user_id_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "users_email_lower_idx" ON "users" USING btree (lower("email"));--> statement-breakpoint
-CREATE INDEX "workbooks_owner_id_idx" ON "workbooks" USING btree ("owner_id");
+CREATE TABLE "fin_valuations" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"account_id" text NOT NULL,
+	"date" date NOT NULL,
+	"value" bigint NOT NULL,
+	"cost_basis" bigint,
+	"note" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "payee_rules" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"payee_pattern" text NOT NULL,
+	"category_id" text NOT NULL,
+	"priority" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "profiles" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"display_name" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "webhook_deliveries" (
+	"id" text PRIMARY KEY NOT NULL,
+	"endpoint_id" text NOT NULL,
+	"event" text NOT NULL,
+	"payload" jsonb NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempt_count" integer DEFAULT 0 NOT NULL,
+	"next_attempt_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_attempt_at" timestamp with time zone,
+	"response_status" integer,
+	"response_body" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "webhook_endpoints" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"url" text NOT NULL,
+	"secret_hash" text NOT NULL,
+	"events" text[] DEFAULT '{}'::text[] NOT NULL,
+	"enabled" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "fin_accounts" ADD CONSTRAINT "fin_accounts_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_budgets" ADD CONSTRAINT "fin_budgets_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_budgets" ADD CONSTRAINT "fin_budgets_category_id_fin_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."fin_categories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_categories" ADD CONSTRAINT "fin_categories_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_inbox" ADD CONSTRAINT "fin_inbox_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_inbox" ADD CONSTRAINT "fin_inbox_matched_account_id_fin_accounts_id_fk" FOREIGN KEY ("matched_account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_inbox" ADD CONSTRAINT "fin_inbox_suggested_category_id_fin_categories_id_fk" FOREIGN KEY ("suggested_category_id") REFERENCES "public"."fin_categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_inbox" ADD CONSTRAINT "fin_inbox_created_transaction_id_fin_transactions_id_fk" FOREIGN KEY ("created_transaction_id") REFERENCES "public"."fin_transactions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_pf_entries" ADD CONSTRAINT "fin_pf_entries_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_pf_entries" ADD CONSTRAINT "fin_pf_entries_account_id_fin_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_reconciliations" ADD CONSTRAINT "fin_reconciliations_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_reconciliations" ADD CONSTRAINT "fin_reconciliations_account_id_fin_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_recurring_rules" ADD CONSTRAINT "fin_recurring_rules_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_recurring_rules" ADD CONSTRAINT "fin_recurring_rules_account_id_fin_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_recurring_rules" ADD CONSTRAINT "fin_recurring_rules_to_account_id_fin_accounts_id_fk" FOREIGN KEY ("to_account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_recurring_rules" ADD CONSTRAINT "fin_recurring_rules_category_id_fin_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."fin_categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_transactions" ADD CONSTRAINT "fin_transactions_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_transactions" ADD CONSTRAINT "fin_transactions_account_id_fin_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_transactions" ADD CONSTRAINT "fin_transactions_to_account_id_fin_accounts_id_fk" FOREIGN KEY ("to_account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_transactions" ADD CONSTRAINT "fin_transactions_category_id_fin_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."fin_categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_user_settings" ADD CONSTRAINT "fin_user_settings_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_valuations" ADD CONSTRAINT "fin_valuations_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "fin_valuations" ADD CONSTRAINT "fin_valuations_account_id_fin_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."fin_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payee_rules" ADD CONSTRAINT "payee_rules_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payee_rules" ADD CONSTRAINT "payee_rules_category_id_fin_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."fin_categories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_endpoint_id_webhook_endpoints_id_fk" FOREIGN KEY ("endpoint_id") REFERENCES "public"."webhook_endpoints"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "webhook_endpoints" ADD CONSTRAINT "webhook_endpoints_user_id_profiles_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "fin_accounts_user_id_idx" ON "fin_accounts" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "fin_accounts_user_kind_idx" ON "fin_accounts" USING btree ("user_id","kind");--> statement-breakpoint
+CREATE INDEX "fin_accounts_user_active_idx" ON "fin_accounts" USING btree ("user_id","is_active");--> statement-breakpoint
+CREATE INDEX "fin_budgets_user_id_idx" ON "fin_budgets" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "fin_budgets_user_category_idx" ON "fin_budgets" USING btree ("user_id","category_id");--> statement-breakpoint
+CREATE INDEX "fin_categories_user_id_idx" ON "fin_categories" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "fin_categories_user_type_idx" ON "fin_categories" USING btree ("user_id","type");--> statement-breakpoint
+CREATE INDEX "fin_inbox_user_status_idx" ON "fin_inbox" USING btree ("user_id","status");--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_inbox_user_idempotency_key_idx" ON "fin_inbox" USING btree ("user_id","idempotency_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_inbox_user_import_hash_idx" ON "fin_inbox" USING btree ("user_id","import_hash") WHERE "fin_inbox"."import_hash" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "fin_inbox_user_id_idx" ON "fin_inbox" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_pf_entries_account_passbook_key_unique" ON "fin_pf_entries" USING btree ("account_id","passbook_key");--> statement-breakpoint
+CREATE INDEX "fin_pf_entries_user_account_idx" ON "fin_pf_entries" USING btree ("user_id","account_id");--> statement-breakpoint
+CREATE INDEX "fin_pf_entries_account_period_idx" ON "fin_pf_entries" USING btree ("account_id","period_month");--> statement-breakpoint
+CREATE INDEX "fin_pf_entries_account_date_idx" ON "fin_pf_entries" USING btree ("account_id","posted_date");--> statement-breakpoint
+CREATE INDEX "fin_reconciliations_user_id_idx" ON "fin_reconciliations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "fin_reconciliations_account_date_idx" ON "fin_reconciliations" USING btree ("account_id","statement_date");--> statement-breakpoint
+CREATE INDEX "fin_recurring_user_id_idx" ON "fin_recurring_rules" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "fin_recurring_active_next_idx" ON "fin_recurring_rules" USING btree ("user_id","is_active","next_occurrence");--> statement-breakpoint
+CREATE INDEX "fin_transactions_user_date_idx" ON "fin_transactions" USING btree ("user_id","date");--> statement-breakpoint
+CREATE INDEX "fin_transactions_account_date_idx" ON "fin_transactions" USING btree ("account_id","date");--> statement-breakpoint
+CREATE INDEX "fin_transactions_user_category_idx" ON "fin_transactions" USING btree ("user_id","category_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_transactions_user_client_req_idx" ON "fin_transactions" USING btree ("user_id","client_request_id") WHERE "fin_transactions"."client_request_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_transactions_user_import_hash_idx" ON "fin_transactions" USING btree ("user_id","import_hash") WHERE "fin_transactions"."import_hash" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "fin_valuations_account_date_idx" ON "fin_valuations" USING btree ("account_id","date");--> statement-breakpoint
+CREATE INDEX "fin_valuations_account_id_idx" ON "fin_valuations" USING btree ("account_id");--> statement-breakpoint
+CREATE INDEX "fin_valuations_user_id_idx" ON "fin_valuations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "payee_rules_user_id_idx" ON "payee_rules" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "payee_rules_user_payee_pattern_idx" ON "payee_rules" USING btree ("user_id","payee_pattern");--> statement-breakpoint
+CREATE INDEX "webhook_deliveries_endpoint_status_idx" ON "webhook_deliveries" USING btree ("endpoint_id","status");--> statement-breakpoint
+CREATE INDEX "webhook_deliveries_status_next_attempt_idx" ON "webhook_deliveries" USING btree ("status","next_attempt_at");--> statement-breakpoint
+CREATE INDEX "webhook_endpoints_user_id_idx" ON "webhook_endpoints" USING btree ("user_id");

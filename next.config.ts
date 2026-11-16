@@ -1,5 +1,25 @@
 import type { NextConfig } from "next";
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
+let supabaseWs = 'ws://127.0.0.1:54321 wss://*.supabase.co';
+try {
+  const parsed = new URL(supabaseUrl);
+  const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  supabaseWs = `${wsProto}//${parsed.host}`;
+} catch {
+  // keep default
+}
+
+const cspHeader = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' fonts.googleapis.com",
+  "font-src 'self' fonts.gstatic.com data:",
+  "img-src 'self' blob: data:",
+  `connect-src 'self' ${supabaseUrl} ${supabaseWs} https://*.supabase.co wss://*.supabase.co`,
+  "frame-ancestors 'none'",
+].join('; ');
+
 const nextConfig: NextConfig = {
   /* config options here */
   env: {
@@ -34,10 +54,6 @@ const nextConfig: NextConfig = {
             value: 'max-age=63072000; includeSubDomains; preload',
           },
           {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
@@ -51,7 +67,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com data:; img-src 'self' blob: data:; connect-src 'self';",
+            value: cspHeader,
           },
         ],
       },

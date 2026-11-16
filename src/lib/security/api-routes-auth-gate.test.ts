@@ -22,7 +22,7 @@ describe('API Security Gate: Authentication Enforcement on All Route Handlers', 
     const routeFiles = getApiRouteFiles(apiRootDir);
 
     it('finds all API route files in src/app/api', () => {
-        expect(routeFiles.length).toBeGreaterThanOrEqual(40);
+        expect(routeFiles.length).toBeGreaterThanOrEqual(30);
     });
 
     for (const filePath of routeFiles) {

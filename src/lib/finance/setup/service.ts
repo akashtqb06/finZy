@@ -154,6 +154,7 @@ export async function skipSetup(userId: string): Promise<FinUserSettings> {
       baseCurrency: 'INR',
       timezone: 'Asia/Kolkata',
       weekStartsOn: 1,
+      dataVersion: 1,
       createdAt: now,
       updatedAt: now,
     })
@@ -409,6 +410,7 @@ export async function completeSetup(
       if (valuationPaise !== null) {
         await tx.insert(finValuations).values({
           id: newId(),
+          userId,
           accountId,
           date: trackingDate,
           value: valuationPaise,

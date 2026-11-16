@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { db } from '../db';
-import { finCategories, finUserSettings } from '../db/schema/finance';
+import { finCategories, finUserSettings, profiles } from '../db/schema';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from './constants';
 import { getDeterministicCategoryColor } from './colors';
 import { newId } from '../db/id';
@@ -8,6 +8,7 @@ import { newId } from '../db/id';
 export interface AuthUser {
   id: string;
   email?: string | null;
+  displayName?: string | null;
   user_metadata?: {
     name?: string;
     full_name?: string;
@@ -16,43 +17,53 @@ export interface AuthUser {
 }
 
 /**
- * Idempotent lazy provisioning on authenticated request:
- * - ensures profile row
- * - ensures fin_user_settings defaults
- * - ensures default categories with colors
+ * Idempotent lazy provisioning on the first authenticated request:
+ * - profile row
+ * - fin_user_settings defaults (baseCurrency: INR, timezone: Asia/Kolkata, dataVersion: 1)
+ * - default categories with colors
  */
 export async function ensureProfile(authUser: AuthUser): Promise<void> {
   const now = new Date();
+  const displayName =
+    authUser.displayName ||
+    authUser.user_metadata?.full_name ||
+    authUser.user_metadata?.name ||
+    authUser.user_metadata?.display_name ||
+    (authUser.email ? authUser.email.split('@')[0] : 'User');
 
-  // 1. Ensure user settings exist
-  const existingSettings = await db
-    .select({ userId: finUserSettings.userId })
-    .from(finUserSettings)
-    .where(eq(finUserSettings.userId, authUser.id))
-    .limit(1);
+  // 1. Ensure profiles row exists
+  await db
+    .insert(profiles)
+    .values({
+      id: authUser.id,
+      displayName,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
 
-  if (existingSettings.length === 0) {
-    await db
-      .insert(finUserSettings)
-      .values({
-        userId: authUser.id,
-        baseCurrency: 'INR',
-        timezone: 'Asia/Kolkata',
-        weekStartsOn: 1,
-        includeEpsInNetWorth: false,
-        includeAccruedInterestInNetWorth: false,
-        setupStep: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing();
-  }
+  // 2. Ensure fin_user_settings defaults exist
+  await db
+    .insert(finUserSettings)
+    .values({
+      userId: authUser.id,
+      baseCurrency: 'INR',
+      timezone: 'Asia/Kolkata',
+      weekStartsOn: 1,
+      includeEpsInNetWorth: false,
+      includeAccruedInterestInNetWorth: false,
+      setupStep: 1,
+      dataVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
 
-  // 2. Ensure default categories with deterministic colors exist for this user
+  // 3. Ensure default categories with colors exist for this user
   const userCategories = await db
     .select({ name: finCategories.name })
     .from(finCategories)
-    .where(eq(finCategories.userId, authUser.id));
+    .where(or(eq(finCategories.userId, authUser.id), eq(finCategories.isSystem, true)));
 
   const existingNames = new Set(userCategories.map((c) => c.name));
 

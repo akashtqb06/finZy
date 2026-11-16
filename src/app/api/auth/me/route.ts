@@ -5,7 +5,9 @@ import { handleApiError } from '@src/app/api/utils';
 export async function GET() {
     try {
         const user = await requireUserApi();
-        return NextResponse.json(user);
+        const res = NextResponse.json(user);
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return res;
     } catch (err) {
         return handleApiError(err);
     }

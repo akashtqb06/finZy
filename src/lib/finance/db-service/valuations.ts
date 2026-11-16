@@ -92,6 +92,7 @@ export async function createValuation(
   const [row] = await db
     .insert(finValuations)
     .values({
+      userId,
       accountId: validated.accountId,
       date: validated.date,
       value: validated.value,
@@ -319,6 +320,7 @@ export async function recomputeDepositValuations(
       await db
         .insert(finValuations)
         .values({
+          userId,
           accountId: account.id,
           date: point.date,
           value: point.value,
