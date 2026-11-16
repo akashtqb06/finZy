@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { ArrowLeftIcon, EyeIcon, EyeOffIcon, KeyRoundIcon, LoaderCircleIcon, MailCheckIcon, SparklesIcon } from 'lucide-react';
 import { createClient } from '@src/lib/supabase/browser';
 import { isSafeRelativePath } from '@src/proxy';
@@ -24,6 +24,7 @@ export function LoginForm({
     const [authMethod, setAuthMethod] = useState<'password' | 'magic-link'>('password');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [otpCode, setOtpCode] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [formError, setFormError] = useState<string | null>(() => {
         if (!initialError) return null;
@@ -39,6 +40,33 @@ export function LoginForm({
     const [isPending, startTransition] = useTransition();
 
     const safeNext = isSafeRelativePath(next) ? next : '/';
+
+    // Parse error hash fragments from Supabase GoTrue redirects (e.g. #error=access_denied&error_code=otp_expired)
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const hash = window.location.hash.startsWith('#')
+            ? window.location.hash.substring(1)
+            : window.location.hash;
+        if (!hash) return;
+        const hashParams = new URLSearchParams(hash);
+        const errorCode = hashParams.get('error_code');
+        const errorDesc = hashParams.get('error_description');
+
+        if (errorCode || errorDesc) {
+            queueMicrotask(() => {
+                if (errorCode === 'otp_expired') {
+                    setFormError(
+                        'This sign-in or reset link has expired or was already used. Please sign in with your password below, or request a fresh link/code.'
+                    );
+                } else {
+                    setFormError(
+                        errorDesc?.replace(/\+/g, ' ') ||
+                            'Authentication error encountered from link. Please try signing in again.'
+                    );
+                }
+            });
+        }
+    }, []);
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,6 +137,37 @@ export function LoginForm({
         });
     };
 
+    const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError(null);
+
+        if (!otpCode.trim()) {
+            setFormError('Please enter the 6-digit verification code.');
+            return;
+        }
+
+        startTransition(async () => {
+            try {
+                const supabase = createClient();
+                const { error } = await supabase.auth.verifyOtp({
+                    email: email.trim(),
+                    token: otpCode.trim(),
+                    type: 'email',
+                });
+
+                if (error) {
+                    setFormError(error.message || 'Invalid or expired verification code.');
+                    return;
+                }
+
+                router.push(safeNext);
+                router.refresh();
+            } catch (_err: unknown) {
+                setFormError('Failed to verify code. Please try again.');
+            }
+        });
+    };
+
     if (magicLinkSent) {
         return (
             <Card className="w-full max-w-sm">
@@ -118,19 +177,53 @@ export function LoginForm({
                     </div>
                     <CardTitle>Check your email</CardTitle>
                     <CardDescription>
-                        We sent a magic sign-in link to <span className="font-medium text-foreground">{email}</span>.
+                        We sent a magic sign-in link and verification code to{' '}
+                        <span className="font-medium text-foreground">{email}</span>.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {formError && (
+                        <Alert variant="destructive">
+                            <AlertTitle>Verification failed</AlertTitle>
+                            <AlertDescription>{formError}</AlertDescription>
+                        </Alert>
+                    )}
                     <p className="text-xs text-muted-foreground text-center">
-                        Click the link in your email to sign in directly without a password.
+                        Click the link in your email to sign in directly, or enter the 6-digit code below:
                     </p>
+                    <form onSubmit={handleVerifyOtpSubmit} className="space-y-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="otp-code">6-digit verification code</Label>
+                            <Input
+                                id="otp-code"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                placeholder="123456"
+                                maxLength={8}
+                                value={otpCode}
+                                onChange={(e) => setOtpCode(e.target.value)}
+                                disabled={isPending}
+                            />
+                        </div>
+                        <Button type="submit" className="w-full" disabled={isPending || !otpCode.trim()}>
+                            {isPending ? (
+                                <>
+                                    <LoaderCircleIcon className="size-4 animate-spin mr-2" />
+                                    Verifying code...
+                                </>
+                            ) : (
+                                'Verify code & sign in'
+                            )}
+                        </Button>
+                    </form>
                     <Button
                         variant="outline"
                         className="w-full"
                         onClick={() => {
                             setMagicLinkSent(false);
                             setFormError(null);
+                            setOtpCode('');
                         }}
                     >
                         <ArrowLeftIcon className="size-4 mr-2" />
@@ -256,7 +349,7 @@ export function LoginForm({
                                 />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                We will email you a secure link that logs you in instantly with a single click.
+                                We will email you a secure link and a 6-digit code to log you in instantly.
                             </p>
                             <Button type="submit" className="w-full mt-2" disabled={isPending}>
                                 {isPending ? (
