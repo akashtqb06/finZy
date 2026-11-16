@@ -16,6 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:create-local": "tsx scripts/create-local-db.ts",
     "db:migrate": "tsx --conditions=react-server src/lib/db/migrate.ts",
+    "db:migrate:legacy": "tsx scripts/db/migrate-from-legacy.ts",
+    "finance:verify": "tsx scripts/finance-verify.ts",
     "db:studio": "drizzle-kit studio",
     "setup": "pnpm install && pnpm run db:migrate"
   },

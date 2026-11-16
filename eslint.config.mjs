@@ -18,6 +18,12 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ['scripts/**/*.{ts,js,mjs}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
     files: ['src/components/**/*.{ts,tsx}', 'src/app/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', {

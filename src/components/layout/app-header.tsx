@@ -17,14 +17,27 @@ import { useBreadcrumbStore } from "./breadcrumb-store";
 import { ThemeToggle } from "./theme-toggle";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { QuickAddSlot } from "@src/components/finance/quick-add/quick-add-slot";
+import { useFinanceStore } from "@src/components/finance/shared/finance-store";
 
-function pathToBreadcrumbs(pathname: string) {
+function pathToBreadcrumbs(
+  pathname: string,
+  accounts: Array<{ id: string; name: string }> = []
+) {
   const segments = pathname.split("/").filter(Boolean);
   return segments.map((seg, idx) => {
     const href = "/" + segments.slice(0, idx + 1).join("/");
-    const label = seg
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    const isPrevAccounts = idx > 0 && segments[idx - 1] === "accounts";
+
+    let label: string;
+    if (isPrevAccounts) {
+      const matched = accounts.find((a) => a.id === seg);
+      label = matched ? matched.name : "Account Details";
+    } else {
+      label = seg
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+
     return { href, label, isLast: idx === segments.length - 1 };
   });
 }
@@ -32,13 +45,14 @@ function pathToBreadcrumbs(pathname: string) {
 export function AppHeader() {
   const pathname = usePathname();
   const customCrumbs = useBreadcrumbStore((s) => s.crumbs);
+  const accounts = useFinanceStore((s) => s.accounts);
 
   // Standalone dashboard viewer (/dashboards/[did]) renders its own dedicated slim header
   if (pathname.match(/^\/dashboards\/[^/]+$/)) {
     return null;
   }
 
-  const fallbackCrumbs = pathToBreadcrumbs(pathname);
+  const fallbackCrumbs = pathToBreadcrumbs(pathname, accounts);
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 bg-background">
@@ -79,7 +93,7 @@ export function AppHeader() {
               fallbackCrumbs.map((crumb) =>
                 crumb.isLast ? (
                   <BreadcrumbItem key={crumb.href}>
-                    <BreadcrumbPage className="font-medium text-foreground">
+                    <BreadcrumbPage className="font-medium text-foreground truncate max-w-[200px] sm:max-w-[320px]">
                       {crumb.label}
                     </BreadcrumbPage>
                   </BreadcrumbItem>

@@ -105,8 +105,12 @@ export async function registerAction(
     redirect(next);
 }
 
-export async function logoutAction(): Promise<void> {
+export async function signOutAction(): Promise<void> {
     const supabase = await createClient();
     await supabase.auth.signOut();
     redirect('/login');
+}
+
+export async function logoutAction(): Promise<void> {
+    return signOutAction();
 }

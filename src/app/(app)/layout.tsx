@@ -1,8 +1,10 @@
 import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from '@src/components/layout/app-sidebar';
 import { AppHeader } from '@src/components/layout/app-header';
+import { BottomNav } from '@src/components/layout/bottom-nav';
 import { UserProvider } from '@src/components/auth/user-provider';
 import { AppSettingsProvider } from '@src/components/settings/app-settings-provider';
 import { getPublicSettings } from '@src/lib/settings/app-settings';
@@ -77,15 +79,18 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
     }
 
     const { appName } = await getPublicSettings().catch(() => ({ appName: 'FinZy' }));
+    const cookieStore = await cookies();
+    const defaultOpen = cookieStore.get('sidebar_state')?.value !== 'false';
 
     return (
         <UserProvider user={user}>
             <AppSettingsProvider initialAppName={appName}>
-                <SidebarProvider>
+                <SidebarProvider defaultOpen={defaultOpen}>
                     <AppSidebar />
                     <SidebarInset className="flex flex-col min-h-0 min-w-0 h-dvh overflow-hidden">
                         <AppHeader />
-                        <main className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden">{children}</main>
+                        <main className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
+                        <BottomNav />
                     </SidebarInset>
                 </SidebarProvider>
             </AppSettingsProvider>
