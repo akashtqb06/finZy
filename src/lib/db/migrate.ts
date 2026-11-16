@@ -1,24 +1,55 @@
 import 'server-only';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
-import { getDb, getPgliteInstance, isPglite } from './client';
+import { getDb, getPgliteInstance, isPglite, isLocalDatabaseUrl, getSslConfig } from './client';
 import { assertTestIsolationGuard } from './guard';
 import * as schema from './schema';
 
 const MIGRATIONS_DIR = path.join(process.cwd(), 'src/lib/db/migrations');
 
+async function confirmRemoteHost(hostname: string): Promise<boolean> {
+    if (process.env.CONFIRM_REMOTE_HOST === hostname) {
+        return true;
+    }
+    if (process.stdin.isTTY) {
+        const readline = await import('node:readline/promises');
+        const { stdin: input, stdout: output } = await import('node:process');
+        const rl = readline.createInterface({ input, output });
+        try {
+            const answer = await rl.question(
+                `CAUTION: You are about to run database migrations against remote host: ${hostname}\nType the hostname '${hostname}' to confirm: `
+            );
+            return answer.trim() === hostname;
+        } finally {
+            rl.close();
+        }
+    }
+    throw new Error(
+        `Non-interactive terminal: migration of remote host '${hostname}' requires setting CONFIRM_REMOTE_HOST='${hostname}'.`
+    );
+}
+
 /**
  * Apply all pending Drizzle migrations from src/lib/db/migrations/ to the active database.
+ * - In test environments, applies against PGlite with auth stubs.
+ * - In production and local environments, applies against DIRECT_URL using a dedicated connection.
+ * - Refuses to run in Vercel build.
+ * - Refuses remote hosts unless passed '--target live' and typed host confirmation.
  */
 export async function runMigrations(): Promise<void> {
+    if (process.env.VERCEL || process.env.NEXT_PHASE === 'phase-production-build') {
+        throw new Error('Migrations must NEVER run in the Vercel build. Run them out-of-band using DIRECT_URL.');
+    }
+
     assertTestIsolationGuard();
 
-    const activeDb = getDb();
     if (isPglite()) {
+        const activeDb = getDb();
         const pglite = getPgliteInstance();
         if (pglite) {
             await pglite.exec(`
@@ -53,7 +84,40 @@ export async function runMigrations(): Promise<void> {
             `);
         }
     } else {
-        await migratePg(activeDb as NodePgDatabase<typeof schema>, { migrationsFolder: MIGRATIONS_DIR });
+        const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+        if (!directUrl) {
+            throw new Error('DIRECT_URL (or DATABASE_URL) must be configured to run migrations.');
+        }
+
+        if (!isLocalDatabaseUrl(directUrl)) {
+            const parsed = new URL(directUrl);
+            const targetIndex = process.argv.indexOf('--target');
+            const isTargetLive = targetIndex !== -1 && process.argv[targetIndex + 1] === 'live';
+            if (!isTargetLive) {
+                throw new Error(
+                    `Refusing to migrate remote host '${parsed.hostname}'. Migrating a remote database requires '--target live' and typed host confirmation.`
+                );
+            }
+
+            const confirmed = await confirmRemoteHost(parsed.hostname);
+            if (!confirmed) {
+                throw new Error(`Migration cancelled: confirmation did not match remote host '${parsed.hostname}'.`);
+            }
+        }
+
+        const pool = new pg.Pool({
+            connectionString: directUrl,
+            max: 1,
+            connectionTimeoutMillis: 10000,
+            ssl: getSslConfig(directUrl),
+        });
+
+        try {
+            const migratorDb = drizzlePg(pool, { schema });
+            await migratePg(migratorDb, { migrationsFolder: MIGRATIONS_DIR });
+        } finally {
+            await pool.end();
+        }
     }
 }
 

@@ -76,7 +76,7 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
         return <DatabaseErrorPage error={err} />;
     }
 
-    const { appName } = await getPublicSettings().catch(() => ({ appName: 'BI Kit' }));
+    const { appName } = await getPublicSettings().catch(() => ({ appName: 'FinZy' }));
 
     return (
         <UserProvider user={user}>
@@ -94,7 +94,7 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-    const { appName } = await getPublicSettings().catch(() => ({ appName: 'BI Kit' }));
+    const { appName } = await getPublicSettings().catch(() => ({ appName: 'FinZy' }));
     return {
         title: {
             default: appName,

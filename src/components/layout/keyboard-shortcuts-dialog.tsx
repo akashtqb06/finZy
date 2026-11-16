@@ -19,33 +19,26 @@ interface ShortcutGroup {
 
 const SHORTCUTS: ShortcutGroup[] = [
   {
-    category: "Query Editor",
+    category: "Finance Navigation",
     items: [
-      { key: "⌘ + Enter / Ctrl + Enter", description: "Run query immediately in Builder or SQL mode" },
-      { key: "Tab", description: "Indent or move through query builder controls" },
-      { key: "Esc", description: "Close schema browser or column search popovers" },
+      { key: "G then O", description: "Go to Overview" },
+      { key: "G then T", description: "Go to Transactions" },
+      { key: "G then A", description: "Go to Accounts" },
+      { key: "G then B", description: "Go to Budgets" },
     ],
   },
   {
-    category: "Query Pipeline",
+    category: "Transactions & Records",
     items: [
-      { key: "Drag Handle (⠿)", description: "Reorder pipeline steps (Join, Filter, Summarize, etc.)" },
-      { key: "Delete Button", description: "Remove a step from the execution pipeline" },
-      { key: "Convert to SQL", description: "Switch pipeline to raw SQL mode for inspection or editing" },
-    ],
-  },
-  {
-    category: "Dashboards",
-    items: [
-      { key: "Edit / View Mode", description: "Toggle grid editing, dragging, and resizing" },
-      { key: "Auto Refresh", description: "Poll and refresh dashboard queries (30s, 1m, 5m)" },
-      { key: "Tile Actions", description: "Jump directly to linked chart editor or refresh query data" },
+      { key: "N", description: "Open Quick Add transaction dialog" },
+      { key: "⌘ + Enter / Ctrl + Enter", description: "Save transaction form" },
+      { key: "Esc", description: "Cancel or close transaction editor" },
     ],
   },
   {
     category: "General",
     items: [
-      { key: "?", description: "Open this keyboard shortcuts dialog (when not in an input)" },
+      { key: "?", description: "Open keyboard shortcuts dialog" },
       { key: "Esc", description: "Close any open dialog or sheet" },
     ],
   },

@@ -7,7 +7,7 @@ export interface AppSettingsContextValue {
     setAppName: (name: string) => void;
 }
 
-const DEFAULT_APP_NAME = 'BI Kit';
+const DEFAULT_APP_NAME = 'FinZy';
 
 const AppSettingsContext = createContext<AppSettingsContextValue>({
     appName: DEFAULT_APP_NAME,

@@ -85,8 +85,8 @@ const fontJetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BI Kit",
-  description: "Local-first business intelligence tool",
+  title: "FinZy",
+  description: "Personal finance and wealth tracking",
 };
 
 export default function RootLayout({

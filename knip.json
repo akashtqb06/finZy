@@ -26,7 +26,6 @@
     "postcss",
     "drizzle-kit",
     "tsx",
-    "better-sqlite3",
     "react-day-picker"
   ],
   "ignoreBinaries": [

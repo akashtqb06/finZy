@@ -1,10 +1,10 @@
 import { Suspense, type ReactNode } from 'react';
-import { BarChart3Icon } from 'lucide-react';
+import { LandmarkIcon } from 'lucide-react';
 import { ThemeToggle } from '@src/components/layout/theme-toggle';
 import { getPublicSettings } from '@src/lib/settings/app-settings';
 
 async function AuthAppName() {
-    const { appName } = await getPublicSettings().catch(() => ({ appName: 'BI Kit' }));
+    const { appName } = await getPublicSettings().catch(() => ({ appName: 'FinZy' }));
     return <span className="text-lg font-semibold tracking-tight">{appName}</span>;
 }
 
@@ -17,14 +17,14 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             <div className="flex w-full max-w-sm flex-col items-center gap-6">
                 <div className="flex items-center gap-2.5">
                     <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                        <BarChart3Icon className="size-5" />
+                        <LandmarkIcon className="size-5" />
                     </span>
-                    <Suspense fallback={<span className="text-lg font-semibold tracking-tight">BI Kit</span>}>
+                    <Suspense fallback={<span className="text-lg font-semibold tracking-tight">FinZy</span>}>
                         <AuthAppName />
                     </Suspense>
                 </div>
                 {children}
-                <p className="text-center text-xs text-muted-foreground">Local-first business intelligence</p>
+                <p className="text-center text-xs text-muted-foreground">Personal finance and wealth tracking</p>
             </div>
         </main>
     );

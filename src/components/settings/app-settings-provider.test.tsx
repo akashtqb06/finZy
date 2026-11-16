@@ -17,13 +17,13 @@ function TestConsumer() {
 }
 
 describe('AppSettingsProvider & Dynamic App Name', () => {
-    it('provides default appName "BI Kit" when no initialAppName is provided', () => {
+    it('provides default appName "FinZy" when no initialAppName is provided', () => {
         const html = renderToString(
             <AppSettingsProvider>
                 <TestConsumer />
             </AppSettingsProvider>
         );
-        expect(html).toContain('BI Kit');
+        expect(html).toContain('FinZy');
     });
 
     it('provides custom appName when configured', () => {
@@ -34,7 +34,7 @@ describe('AppSettingsProvider & Dynamic App Name', () => {
             </AppSettingsProvider>
         );
         expect(html).toContain(customName);
-        expect(html).not.toContain('BI Kit');
+        expect(html).not.toContain('FinZy');
     });
 
     it('renders custom appName inside AppSidebar header', () => {
@@ -47,6 +47,6 @@ describe('AppSettingsProvider & Dynamic App Name', () => {
             </SidebarProvider>
         );
         expect(html).toContain(customName);
-        expect(html).not.toContain('BI Kit');
+        expect(html).not.toContain('FinZy');
     });
 });

@@ -37,7 +37,7 @@ describe('Finance API Routes (Authentication & 501 Stubs Enforced)', () => {
     setTestUser(null); // default unauthenticated
   });
 
-  const testUser = { id: 'usr_test_1', role: 'member' };
+  const testUser = { id: 'a0000000-0000-0000-0000-000000000001', role: 'member' };
 
   describe('Accounts API (/api/finance/accounts)', () => {
     it('returns 401 when unauthenticated', async () => {
