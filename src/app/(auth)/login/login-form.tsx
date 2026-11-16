@@ -2,8 +2,17 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
-import { ArrowLeftIcon, EyeIcon, EyeOffIcon, KeyRoundIcon, LoaderCircleIcon, MailCheckIcon, SparklesIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+    ArrowLeftIcon,
+    EyeIcon,
+    EyeOffIcon,
+    KeyRoundIcon,
+    LoaderCircleIcon,
+    MailCheckIcon,
+    SparklesIcon,
+} from 'lucide-react';
+import { loginAction } from '@src/app/actions/auth';
 import { createClient } from '@src/lib/supabase/browser';
 import { isSafeRelativePath } from '@src/proxy';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -37,7 +46,7 @@ export function LoginForm({
         return 'Authentication failed. Please sign in again.';
     });
     const [magicLinkSent, setMagicLinkSent] = useState(false);
-    const [isPending, startTransition] = useTransition();
+    const [isPending, setIsPending] = useState(false);
 
     const safeNext = isSafeRelativePath(next) ? next : '/';
 
@@ -68,41 +77,27 @@ export function LoginForm({
         }
     }, []);
 
-    const handlePasswordSubmit = async (e: React.FormEvent) => {
+    const handlePasswordLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setIsPending(true);
         setFormError(null);
 
-        if (!email.trim() || !password) {
-            setFormError('Please enter both email and password.');
-            return;
-        }
-
-        startTransition(async () => {
-            try {
-                const supabase = createClient();
-                const { error } = await supabase.auth.signInWithPassword({
-                    email: email.trim(),
-                    password,
-                });
-
-                if (error) {
-                    setFormError('Invalid email or password');
-                    return;
-                }
-
-                // Check MFA requirement
-                const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-                if (aalData && aalData.nextLevel === 'aal2' && aalData.currentLevel !== 'aal2') {
-                    router.push(`/mfa?next=${encodeURIComponent(safeNext)}`);
-                    return;
-                }
-
-                router.push(safeNext);
-                router.refresh();
-            } catch (_err: unknown) {
-                setFormError('An unexpected error occurred. Please try again.');
+        try {
+            const formData = new FormData(e.currentTarget);
+            formData.set('next', safeNext);
+            const res = await loginAction(formData);
+            if (res?.error) {
+                setFormError(res.error);
+                setIsPending(false);
             }
-        });
+        } catch (caughtError) {
+            // Next.js redirect throws an error that should not be intercepted as a regular error
+            if (caughtError instanceof Error && caughtError.message.includes('NEXT_REDIRECT')) {
+                throw caughtError;
+            }
+            setFormError(caughtError instanceof Error ? caughtError.message : 'Invalid email or password.');
+            setIsPending(false);
+        }
     };
 
     const handleMagicLinkSubmit = async (e: React.FormEvent) => {
@@ -114,27 +109,29 @@ export function LoginForm({
             return;
         }
 
-        startTransition(async () => {
-            try {
-                const supabase = createClient();
-                const origin = window.location.origin;
-                const { error } = await supabase.auth.signInWithOtp({
-                    email: email.trim(),
-                    options: {
-                        emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(safeNext)}`,
-                    },
-                });
+        setIsPending(true);
+        try {
+            const supabase = createClient();
+            const origin = window.location.origin;
+            const { error } = await supabase.auth.signInWithOtp({
+                email: email.trim(),
+                options: {
+                    emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(safeNext)}`,
+                },
+            });
 
-                if (error) {
-                    setFormError(error.message || 'Failed to send magic link. Please try again.');
-                    return;
-                }
-
-                setMagicLinkSent(true);
-            } catch (_err: unknown) {
-                setFormError('An unexpected error occurred while sending the magic link.');
+            if (error) {
+                setFormError(error.message || 'Failed to send magic link. Please try again.');
+                setIsPending(false);
+                return;
             }
-        });
+
+            setMagicLinkSent(true);
+            setIsPending(false);
+        } catch (_err: unknown) {
+            setFormError('An unexpected error occurred while sending the magic link.');
+            setIsPending(false);
+        }
     };
 
     const handleVerifyOtpSubmit = async (e: React.FormEvent) => {
@@ -146,26 +143,27 @@ export function LoginForm({
             return;
         }
 
-        startTransition(async () => {
-            try {
-                const supabase = createClient();
-                const { error } = await supabase.auth.verifyOtp({
-                    email: email.trim(),
-                    token: otpCode.trim(),
-                    type: 'email',
-                });
+        setIsPending(true);
+        try {
+            const supabase = createClient();
+            const { error } = await supabase.auth.verifyOtp({
+                email: email.trim(),
+                token: otpCode.trim(),
+                type: 'email',
+            });
 
-                if (error) {
-                    setFormError(error.message || 'Invalid or expired verification code.');
-                    return;
-                }
-
-                router.push(safeNext);
-                router.refresh();
-            } catch (_err: unknown) {
-                setFormError('Failed to verify code. Please try again.');
+            if (error) {
+                setFormError(error.message || 'Invalid or expired verification code.');
+                setIsPending(false);
+                return;
             }
-        });
+
+            router.push(safeNext);
+            router.refresh();
+        } catch (_err: unknown) {
+            setFormError('Failed to verify code. Please try again.');
+            setIsPending(false);
+        }
     };
 
     if (magicLinkSent) {
@@ -268,11 +266,12 @@ export function LoginForm({
                     )}
 
                     <TabsContent value="password">
-                        <form onSubmit={handlePasswordSubmit} className="grid gap-4" noValidate>
+                        <form onSubmit={handlePasswordLogin} className="grid gap-4" noValidate>
                             <div className="grid gap-2">
                                 <Label htmlFor="email-password">Email</Label>
                                 <Input
                                     id="email-password"
+                                    name="email"
                                     type="email"
                                     autoComplete="email"
                                     placeholder="you@example.com"
@@ -295,6 +294,7 @@ export function LoginForm({
                                 <div className="relative">
                                     <Input
                                         id="password"
+                                        name="password"
                                         type={showPassword ? 'text' : 'password'}
                                         autoComplete="current-password"
                                         className="pr-10"
