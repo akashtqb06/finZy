@@ -50,6 +50,7 @@ export interface EtlSummary {
 
 // Tables to skip explicitly
 export const SKIPPED_TABLES = new Set([
+    'api_tokens',
     'sessions',
     'login_attempts',
     'audit_log',
@@ -68,7 +69,7 @@ export const SKIPPED_TABLES = new Set([
 // Source column allowlists per table. If an unexpected column is present, fail loudly.
 export const TABLE_COLUMN_MAP: Record<string, { allowedSourceCols: string[]; targetCols: string[] }> = {
     users: {
-        allowedSourceCols: ['id', 'name', 'email', 'password_hash', 'role', 'created_at', 'updated_at', 'avatar_url', 'metadata'],
+        allowedSourceCols: ['id', 'name', 'email', 'password_hash', 'role', 'status', 'created_at', 'updated_at', 'avatar_url', 'metadata', 'last_login_at', 'must_change_password'],
         targetCols: ['id', 'display_name', 'created_at', 'updated_at'],
     },
     fin_user_settings: {
@@ -142,15 +143,15 @@ export const TABLE_COLUMN_MAP: Record<string, { allowedSourceCols: string[]; tar
         targetCols: ['id', 'user_id', 'idempotency_key', 'source', 'received_at', 'date', 'amount', 'direction', 'currency', 'merchant', 'description', 'account_hint', 'reference', 'raw', 'status', 'matched_account_id', 'suggested_category_id', 'duplicate_warning', 'import_hash', 'created_transaction_id', 'created_at', 'updated_at'],
     },
     payee_rules: {
-        allowedSourceCols: ['id', 'user_id', 'payee_pattern', 'match_type', 'category_id', 'created_at', 'updated_at'],
-        targetCols: ['id', 'user_id', 'payee_pattern', 'match_type', 'category_id', 'created_at', 'updated_at'],
+        allowedSourceCols: ['id', 'user_id', 'payee_pattern', 'category_id', 'priority', 'created_at', 'updated_at', 'match_type'],
+        targetCols: ['id', 'user_id', 'payee_pattern', 'category_id', 'priority', 'created_at'],
     },
     webhook_endpoints: {
         allowedSourceCols: ['id', 'user_id', 'url', 'secret_hash', 'events', 'enabled', 'created_at', 'updated_at'],
         targetCols: ['id', 'user_id', 'url', 'secret_hash', 'events', 'enabled', 'created_at', 'updated_at'],
     },
     webhook_deliveries: {
-        allowedSourceCols: ['id', 'endpoint_id', 'event_type', 'payload', 'status', 'attempt_count', 'next_attempt_at', 'last_attempt_at', 'last_status_code', 'last_error', 'created_at'],
+        allowedSourceCols: ['id', 'endpoint_id', 'event', 'event_type', 'payload', 'status', 'attempt_count', 'next_attempt_at', 'last_attempt_at', 'response_status', 'last_status_code', 'response_body', 'last_error', 'created_at'],
         targetCols: ['id', 'endpoint_id', 'event_type', 'payload', 'status', 'attempt_count', 'next_attempt_at', 'last_attempt_at', 'last_status_code', 'last_error', 'created_at'],
     },
 };
@@ -687,10 +688,10 @@ export async function runEtlMigration(options: EtlOptions): Promise<EtlSummary> 
                 for (const pr of oldRulesRes.rows) {
                     const newUuid = oldIdToNewUuid.get(pr.user_id)!;
                     await targetClient.query(
-                        `INSERT INTO public.payee_rules (id, user_id, payee_pattern, match_type, category_id, created_at, updated_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        `INSERT INTO public.payee_rules (id, user_id, payee_pattern, category_id, priority, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6)
                          ON CONFLICT (id) DO NOTHING;`,
-                        [pr.id, newUuid, pr.payee_pattern, pr.match_type, pr.category_id, pr.created_at, pr.updated_at]
+                        [pr.id, newUuid, pr.payee_pattern, pr.category_id, pr.priority ?? 0, pr.created_at]
                     );
                 }
             }
@@ -769,8 +770,8 @@ export async function runEtlMigration(options: EtlOptions): Promise<EtlSummary> 
                     vt.tgtParams
                 );
 
-                const srcIds: string[] = sRes.rows.map((r: { id: string }) => r.id);
-                const tgtIds: string[] = tRes.rows.map((r: { id: string }) => r.id);
+                const srcIds: string[] = sRes.rows.map((r: { id: string }) => r.id).sort();
+                const tgtIds: string[] = tRes.rows.map((r: { id: string }) => r.id).sort();
 
                 const srcHash = sha256Hex(srcIds.join(','));
                 const tgtHash = sha256Hex(tgtIds.join(','));
