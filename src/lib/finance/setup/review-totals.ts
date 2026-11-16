@@ -1,6 +1,7 @@
 import type { DraftAccount, ReviewTotals, AccountWarning } from './types';
 import { ACCOUNT_KIND_CLASS_MAP } from '../constants';
-import { calculateFDAccruedValue, calculateRDAccruedValue } from '../domain/deposits';
+import { calculateRDAccruedValue } from '../domain/deposits';
+import { calculateFDValue, type FDCompounding, type FDType, type FDAccrualMode } from '../domain/fd';
 
 /**
  * Calculates review totals and warnings for draft accounts.
@@ -55,14 +56,22 @@ export function calculateReviewTotals(
         const principal = acc.principalPaise || acc.balancePaise || 0;
         let val = acc.currentValuePaise;
         if (val === undefined && principal > 0 && acc.startDate) {
-          val = calculateFDAccruedValue({
-            principal,
-            annualInterestRate: (acc.interestRate || 0) / 100,
-            compoundingFrequency: acc.compoundingFrequency ?? 'quarterly',
-            startDate: acc.startDate,
-            maturityDate: acc.maturityDate,
-            asOfDate: trackingStartDate,
-          });
+          const rawRate = Number(acc.interestRate || 7.1);
+          const ratePercent = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
+          const maturityDate = acc.maturityDate || acc.startDate;
+          val = calculateFDValue(
+            {
+              principal,
+              ratePercent,
+              startDate: acc.startDate,
+              maturityDate,
+              compounding: (acc.compoundingFrequency || 'quarterly') as FDCompounding,
+              fdType: (acc.fdType || 'cumulative') as FDType,
+              accrualMode: (acc.accrualMode || 'bank') as FDAccrualMode,
+              maturityAmountPerReceipt: acc.maturityAmountPerReceipt,
+            },
+            trackingStartDate
+          ).currentValue;
         }
         totalAssetsPaise += Math.max(0, val || principal);
 

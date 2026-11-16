@@ -43,6 +43,7 @@ describe('API routes 401 unauthenticated security gate (enumerating test)', () =
     const publicOrCronEndpoints = [
         'src/app/api/health/route.ts',
         'src/app/api/settings/public/route.ts',
+        'src/app/api/cron/daily/route.ts',
         'src/app/api/cron/recurring/route.ts',
         'src/app/api/cron/valuations/route.ts',
     ];

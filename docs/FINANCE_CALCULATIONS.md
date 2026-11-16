@@ -50,25 +50,55 @@ When changing the installment day, an entry `{ effectiveFrom: 'YYYY-MM', day: ne
 
 ## 2. Fixed Deposit (FD) Calculations
 
-### 2.1 Formula & Compounding Convention
-For principal $P$ (in paise) at annual interest rate $r\%$ for tenure $t$ (in years):
+### 2.1 Overview & Product Types
+Fixed Deposits are classified into two models via `metadata.fdType`:
+1. **Cumulative FDs (`'cumulative'`, default)**:
+   Interest compounds periodically and is reinvested. The maturity proceeds (principal + all accrued interest) are paid at maturity. Cumulative FDs never post periodic income transactions; on maturity, the proceeds are transferred to a bank account via the "Close FD" action.
+2. **Payout FDs (`'payout'`)**:
+   Interest is paid out periodically (monthly, quarterly, half-yearly, yearly, or at maturity) into a designated bank account (`payoutAccountId`).
+   - Principal value remains constant (`currentValue = principal`).
+   - Interest per payout: $\text{principal} \times \frac{r}{100 \times n_{\text{payout}}}$.
+   - Each payout posts an income transaction (category `"Interest"`) into `payoutAccountId` via the recurring engine.
 
-$$\text{value} = P \times \left(1 + \frac{r}{100 \times n}\right)^{n \times t}$$
+---
 
-Where compounding frequency count $n$ is:
-- **Quarterly (Default)**: $n = 4$
-- **Monthly**: $n = 12$
-- **Half-yearly**: $n = 2$
-- **Yearly**: $n = 1$
-- **Simple Interest ($n = 0$)**: $\text{value} = P \times \left(1 + \frac{r}{100} \times t\right)$
+### 2.2 Cumulative Compounding Models
 
-Where tenure $t = \frac{\text{days between start date and } \min(asOfDate, maturityDate)}{365.0}$.
-Interest stops compounding after the maturity date.
+#### 2.2.1 Period Boundaries
+For compounding frequency $n$ (monthly $n=12$, quarterly $n=4$, half-yearly $n=2$, yearly $n=1$):
+Boundaries occur at $\text{startDate} + k \times \frac{12}{n}\text{ months}$ anchored to the opening date with calendar day-of-month clamping. If the maturity date does not coincide with a period boundary, the final interval is treated as a partial period.
 
-### 2.2 Manual Valuation Anchor Rule
-If a manual valuation exists at anchor date $D_{\text{anchor}}$:
-- The anchor value compounds forward from $D_{\text{anchor}}$ to $\min(asOfDate, maturityDate)$ using the account's rate and compounding frequency.
-- Interest earned = $\text{currentValue} - P$.
+#### 2.2.2 Bank Mode (`'bank'`, Indian Banking Standard, Default)
+- **Completed Compounding Periods ($k$)**:
+  $$B_k = P \times \left(1 + \frac{r}{100 \times n}\right)^k$$
+- **In-Progress Period**:
+  Adds simple interest on the beginning-of-period balance $B_k$ for elapsed calendar days:
+  $$\text{interest}_{\text{in-progress}} = B_k \times \frac{r}{100} \times \frac{\text{elapsedDays}}{\text{dayBasis}}$$
+  Where $\text{dayBasis}$ is $365$ (or $366$ if the in-progress period spans a leap year February 29).
+- **At Maturity**:
+  If the tenure is not a whole number of compounding periods, the final partial period earns simple interest.
+
+#### 2.2.3 Smooth Mode (`'smooth'`, Continuous Curve)
+$$\text{value}(asOf) = P \times \left(1 + \frac{r}{100 \times n}\right)^{n \times \frac{\text{elapsedDays}}{365}}$$
+
+#### 2.2.4 Effective Annual Yield
+$$\text{effectiveYieldPercent} = \left[\left(1 + \frac{r}{100 \times n}\right)^n - 1\right] \times 100$$
+
+---
+
+### 2.3 Receipt Calibration (Bisection Solver)
+When `maturityAmountPerReceipt` is specified from an official bank certificate or receipt:
+1. An iterative bisection solver finds the effective nominal rate $r^*$ such that $\text{projectedMaturity}(r^*) = \text{maturityAmountPerReceipt}$ within ₹0.01 (1 paisa).
+2. The calibrated rate $r^*$ is used for daily accruals and valuations before maturity, guaranteeing zero discrepancy at maturity.
+3. The UI highlights the exact difference between the bank's certificate amount and standard formula: `"Your bank's amount differs by ₹X from the formula"`.
+
+---
+
+### 2.4 Manual Valuation Anchor Rule
+If a manual valuation exists on or before $asOfDate$ at anchor date $D_{\text{anchor}}$:
+- The anchor value is treated as the principal as of $D_{\text{anchor}}$.
+- Value accrues forward from $D_{\text{anchor}}$ to $asOfDate$ under the account's rate and compounding rules.
+- Computed valuations never overwrite manual anchors.
 
 ---
 

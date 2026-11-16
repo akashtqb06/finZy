@@ -9,10 +9,17 @@ import {
   netWorthHistoryQuerySchema,
 } from '../contract';
 import { todayInTz, DEFAULT_TZ } from '../timezone';
-import { calculateFDAccruedValue, calculateRDAccruedValue, normalizeInterestRate } from '../domain/deposits';
+import { calculateRDAccruedValue, normalizeInterestRate, addMonthsToDate } from '../domain/deposits';
+import {
+  calculateFDValue,
+  type FDConfig,
+  type FDType,
+  type FDCompounding,
+  type FDAccrualMode,
+  type FDPayoutFrequency,
+} from '../domain/fd';
 import { calculateInvestmentHolding } from '../domain/investments';
 import { catchUpRecurringRulesIfDue } from '../recurring';
-import type { CompoundingFrequency } from '../constants';
 
 export async function getNetWorthHistory(
   userId: string,
@@ -419,22 +426,34 @@ export async function getAccountHistory(
 
     const rawRate = Number(meta.interestRate ?? meta.rate ?? 0.07);
     const normRate = normalizeInterestRate(rawRate);
-    const compoundingFrequency = (meta.compoundingFrequency ?? 'quarterly') as CompoundingFrequency;
     const depStartDate = (meta.startDate as string) || openingDate;
 
     if (account.kind === 'fixed_deposit') {
       const principal = Number(meta.principalPaise ?? meta.depositAmount ?? currentBalance);
+      const fdType = (meta.fdType as FDType) || 'cumulative';
+      const compounding = (meta.compounding ?? meta.compoundingFrequency ?? 'quarterly') as FDCompounding;
+      const accrualMode = (meta.accrualMode as FDAccrualMode) || 'bank';
+      const ratePercent = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
+      const maturityDate = (meta.maturityDate as string) || addMonthsToDate(depStartDate, Number(meta.tenureMonths || 12));
+
+      const fdConfig: FDConfig = {
+        principal,
+        ratePercent,
+        startDate: depStartDate,
+        maturityDate,
+        fdType,
+        compounding,
+        accrualMode,
+        dayCount: 'act_365',
+        maturityAmountPerReceipt: meta.maturityAmountPerReceipt ? Number(meta.maturityAmountPerReceipt) : undefined,
+        payoutFrequency: meta.payoutFrequency as FDPayoutFrequency | undefined,
+        payoutAccountId: meta.payoutAccountId as string | undefined,
+      };
+
       history = dateList.map((d) => {
         let val = principal;
         if (d >= depStartDate) {
-          val = calculateFDAccruedValue({
-            principal,
-            annualInterestRate: normRate,
-            compoundingFrequency,
-            startDate: depStartDate,
-            maturityDate: meta.maturityDate as string | undefined,
-            asOfDate: d,
-          });
+          val = calculateFDValue(fdConfig, d).currentValue;
         }
         return {
           date: d,

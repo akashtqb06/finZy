@@ -30,7 +30,8 @@ export function useKeyboardVisible(): boolean {
 }
 
 /**
- * Detects whether any modal dialog or sheet is currently open.
+ * Detects whether any modal dialog, sheet, or drawer is currently open.
+ * Also locks body scroll while any modal layer is active on mobile.
  */
 export function useIsDialogOpen(): boolean {
   const [isDomDialogOpen, setIsDomDialogOpen] = React.useState(false);
@@ -41,7 +42,9 @@ export function useIsDialogOpen(): boolean {
     if (typeof document === 'undefined') return;
 
     const checkDialog = () => {
-      const dialog = document.querySelector('[role="dialog"], [data-slot="dialog-content"], [data-slot="sheet-content"]');
+      const dialog = document.querySelector(
+        '[role="dialog"], [data-slot="dialog-content"], [data-slot="sheet-content"], [data-slot="drawer-content"], [data-slot="drawer-popup"], [aria-modal="true"]'
+      );
       setIsDomDialogOpen(Boolean(dialog));
     };
 
@@ -55,11 +58,24 @@ export function useIsDialogOpen(): boolean {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['role', 'data-state'],
+      attributeFilter: ['role', 'data-state', 'data-slot', 'aria-modal'],
     });
 
     return () => observer.disconnect();
   }, []);
 
-  return isDomDialogOpen || quickAddOpen || payBillOpen;
+  const isOpen = isDomDialogOpen || quickAddOpen || payBillOpen;
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  return isOpen;
 }

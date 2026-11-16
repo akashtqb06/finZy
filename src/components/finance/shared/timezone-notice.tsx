@@ -9,7 +9,8 @@ import { useFinanceStore } from './finance-store';
 function getInitialTzState(userTz: string): { browserTz: string | null; dismissed: boolean } {
   try {
     if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
-      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (detected === 'Asia/Calcutta') detected = 'Asia/Kolkata';
       if (detected && detected !== userTz) {
         let isDismissed = false;
         if (typeof sessionStorage !== 'undefined') {

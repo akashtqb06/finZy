@@ -96,19 +96,35 @@ Where:
 
 ## 4. Fixed Deposit (FD) and Recurring Deposit (RD) Formulas
 
-### 4.1 Fixed Deposit (FD) Closed-Form Formula
-For a lump sum deposit $P$ (in paise) at annual interest rate $r$ (decimal, e.g. $0.075$ for $7.5\%$) for tenure $t$ (years):
+### 4.1 Fixed Deposit (FD) Data Model & Calculations
 
-$$A = P \left(1 + \frac{r}{n}\right)^{n \cdot t}$$
+#### 4.1.1 Data Model (`fin_accounts.metadata` for `kind: 'fixed_deposit'`)
+- `fdType`: `'cumulative'` (default) | `'payout'`.
+- `principal`: Integer minor units (paise).
+- `ratePercent`: Annual nominal interest rate percent (e.g. 7.1 for 7.1%, stored strictly as percent, never decimal fraction or basis points).
+- `startDate`: Account opening date (`YYYY-MM-DD`).
+- `maturityDate`: Derived or user-specified maturity date (`YYYY-MM-DD`).
+- `tenureYears`, `tenureMonths`, `tenureDays`: Optional explicit tenure components.
+- `compounding`: Compounding frequency for cumulative FDs (`'quarterly'` default, `'monthly'`, `'half_yearly'`, `'yearly'`).
+- `accrualMode`: `'bank'` (default, discrete period compounding + in-progress simple interest) | `'smooth'` (continuous exponential power curve).
+- `dayCount`: `'act_365'` (default, actual days divided by 365, or 366 when a period spans leap year February 29).
+- `maturityAmountPerReceipt`: Optional integer paise from bank certificate for receipt calibration.
+- `payoutFrequency`: For payout FDs (`'monthly'`, `'quarterly'`, `'half_yearly'`, `'yearly'`, `'at_maturity'`).
+- `payoutAccountId`: For payout FDs, target bank account receiving automated interest credits.
 
-Where $n$ is the compounding frequency per year:
-- Monthly: $n = 12$
-- Quarterly (Indian banking default): $n = 4$
-- Half-yearly: $n = 2$
-- Yearly: $n = 1$
-- Simple Interest ($n = 0$): $A = P \cdot (1 + r \cdot t)$
-
-**Interest Earned**: $I = A - P$.
+#### 4.1.2 Valuation Rules & Compounding
+- **Cumulative FDs**:
+  - Discrete Bank Mode: Compounding occurs at $\text{startDate} + k \times \frac{12}{n}$ months. Intermediate days accrue simple interest on beginning-of-quarter balance: $B_k \times \frac{r}{100} \times \frac{\text{days}}{\text{basis}}$.
+  - Maturity: Non-integer final periods earn simple interest.
+  - Returns: Current value, accrued interest, daily accrual, effective yield $((1 + \frac{r}{100 n})^n - 1) \times 100$, countdown, and period schedule table.
+- **Payout FDs**:
+  - Value is constant and equals principal (`currentValue = principal`).
+  - Interest per payout: $\text{principal} \times \frac{r}{100 \times n_{\text{payout}}}$.
+  - Recurring income rule (`type: 'income'`, category `"Interest"`) automatically scheduled into `payoutAccountId`.
+- **Receipt Calibration**:
+  When `maturityAmountPerReceipt` is present, a bisection solver calculates the effective annual rate matching the receipt within ₹0.01 and accrues to that exact maturity amount.
+- **Manual Anchors**:
+  Manual valuations are preserved and accrued forward, never overwritten by automated jobs.
 
 ### 4.2 Recurring Deposit (RD) Closed-Form Formula & Data Model
 

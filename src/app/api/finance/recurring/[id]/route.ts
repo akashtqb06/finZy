@@ -5,8 +5,8 @@ import { jsonNoStore } from '../../utils';
 import { updateRecurringRuleSchema } from '@src/lib/finance/contract';
 import { getFinanceService } from '@src/lib/finance/service';
 import { checkFeatureGatedApi } from '@src/lib/finance/flags';
-import { generateDueRecurringTransactions } from '@src/lib/finance/recurring';
-import { todayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
+import { generateDueRecurringTransactions, getUserTimezone } from '@src/lib/finance/recurring';
+import { todayInTz } from '@src/lib/finance/timezone';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -39,7 +39,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const rule = await service.updateRecurringRule(user.id, id, data);
 
     if (rule.isActive) {
-      const today = todayInTz(DEFAULT_TZ);
+      const tz = await getUserTimezone(user.id);
+      const today = todayInTz(tz);
       await generateDueRecurringTransactions({
         userId: user.id,
         asOfDate: today,

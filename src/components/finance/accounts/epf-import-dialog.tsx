@@ -226,7 +226,7 @@ export function EpfImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6 overflow-hidden">
+      <DialogContent className="max-w-4xl max-h-[90dvh] flex flex-col p-6 overflow-hidden">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>

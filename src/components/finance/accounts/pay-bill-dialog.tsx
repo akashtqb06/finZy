@@ -462,7 +462,7 @@ export function PayBillDialog() {
   if (isMobile) {
     return (
       <Sheet open={payBillOpen} onOpenChange={handleOpenChange}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] overflow-y-auto px-4 pb-6">
           <SheetHeader className="text-left pb-2">
             <SheetTitle className="text-base font-bold flex items-center gap-2">
               <CreditCardIcon className="size-4 text-primary" />

@@ -339,50 +339,50 @@ export function BudgetsView() {
       </div>
 
       {/* Aggregate KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Budgeted */}
-        <div className="rounded-xl border bg-card p-4 shadow-xs">
+        <div className="rounded-xl border bg-card p-3 sm:p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Total Budgeted</span>
-            <PiggyBankIcon className="size-4 text-primary" />
+            <span className="truncate">Total Budgeted</span>
+            <PiggyBankIcon className="size-4 text-primary shrink-0" />
           </div>
-          <div className="text-2xl font-bold tracking-tight mt-2">
+          <div className="text-lg sm:text-2xl font-bold tracking-tight mt-1.5 sm:mt-2 truncate">
             {formatINR(summary.totalEffectiveBudget)}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1 hidden sm:block">
             Across {summary.totalBudgetsCount} category budget{summary.totalBudgetsCount === 1 ? '' : 's'}
           </p>
         </div>
 
         {/* Total Spent */}
-        <div className="rounded-xl border bg-card p-4 shadow-xs">
+        <div className="rounded-xl border bg-card p-3 sm:p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Total Spent</span>
-            <TrendingDownIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+            <span className="truncate">Total Spent</span>
+            <TrendingDownIcon className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           </div>
-          <div className="text-2xl font-bold tracking-tight mt-2 text-foreground">
+          <div className="text-lg sm:text-2xl font-bold tracking-tight mt-1.5 sm:mt-2 text-foreground truncate">
             {formatINR(summary.totalSpent)}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[11px] text-muted-foreground">
-              {summary.percentageUsed}% of budget used
+            <span className="text-[11px] text-muted-foreground truncate">
+              {summary.percentageUsed}% used
             </span>
           </div>
         </div>
 
         {/* Remaining / Overspent */}
-        <div className="rounded-xl border bg-card p-4 shadow-xs">
+        <div className="rounded-xl border bg-card p-3 sm:p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{summary.totalOverspent > 0 ? 'Overspent Amount' : 'Remaining Budget'}</span>
+            <span className="truncate">{summary.totalOverspent > 0 ? 'Overspent' : 'Remaining'}</span>
             {summary.totalOverspent > 0 ? (
-              <AlertTriangleIcon className="size-4 text-destructive" />
+              <AlertTriangleIcon className="size-4 text-destructive shrink-0" />
             ) : (
-              <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             )}
           </div>
           <div
             className={cn(
-              'text-2xl font-bold tracking-tight mt-2',
+              'text-lg sm:text-2xl font-bold tracking-tight mt-1.5 sm:mt-2 truncate',
               summary.totalOverspent > 0
                 ? 'text-destructive'
                 : 'text-emerald-600 dark:text-emerald-400'
@@ -392,7 +392,7 @@ export function BudgetsView() {
               ? formatINR(summary.totalOverspent)
               : formatINR(summary.totalRemaining)}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
+          <p className="text-[11px] text-muted-foreground mt-1 hidden sm:block">
             {summary.totalOverspent > 0
               ? 'Exceeded planned budget'
               : 'Safe unspent allowance'}
@@ -400,7 +400,7 @@ export function BudgetsView() {
         </div>
 
         {/* Health / Alert Status Breakdown */}
-        <div className="rounded-xl border bg-card p-4 shadow-xs flex flex-col justify-between">
+        <div className="rounded-xl border bg-card p-3 sm:p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Budget Health</span>
             <Badge

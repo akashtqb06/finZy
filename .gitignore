@@ -48,6 +48,7 @@ yarn-error.log*
 .backups/
 backup-*.sql
 *.sql
+!src/lib/db/migrations/*.sql
 
 # vercel
 .vercel

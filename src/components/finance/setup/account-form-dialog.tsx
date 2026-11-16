@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -27,6 +26,9 @@ import type { DraftAccount } from '@src/lib/finance/setup/types';
 import { parseMoneyToPaise } from '@src/lib/finance/import/number-parser';
 import { AlertCircleIcon, InfoIcon, ShieldCheckIcon } from 'lucide-react';
 import { RDFormFields } from '../accounts/rd-form-fields';
+import { FDFormFields, type FDFormValues } from '../accounts/fd-form-fields';
+import { addMonthsToDate } from '@src/lib/finance/domain/deposits';
+import type { FDType, FDCompounding, FDAccrualMode, FDPayoutFrequency } from '@src/lib/finance/domain/fd';
 import type { RDCompounding, RDFirstInstallmentOn } from '@src/lib/finance/domain/rd';
 
 interface AccountFormDialogProps {
@@ -63,10 +65,7 @@ export function AccountFormDialog({
   );
   const [dueDay, setDueDay] = useState(initialAccount?.dueDay?.toString() || '');
 
-  // FD & RD
-  const [principal, setPrincipal] = useState(
-    initialAccount?.principalPaise ? (initialAccount.principalPaise / 100).toString() : ''
-  );
+  // RD & Loan
   const [monthlyInstallment, setMonthlyInstallment] = useState(
     initialAccount?.monthlyInstallmentPaise
       ? (initialAccount.monthlyInstallmentPaise / 100).toString()
@@ -81,7 +80,7 @@ export function AccountFormDialog({
   const [startDate, setStartDate] = useState(
     initialAccount?.startDate || trackingStartDate
   );
-  const [maturityDate, setMaturityDate] = useState(
+  const [maturityDate] = useState(
     initialAccount?.maturityDate || ''
   );
   const [tenureMonths, setTenureMonths] = useState(
@@ -92,6 +91,27 @@ export function AccountFormDialog({
       ? (initialAccount.currentValuePaise / 100).toString()
       : ''
   );
+
+  // Fixed Deposit state
+  const [fdValues, setFdValues] = useState<FDFormValues>(() => ({
+    fdType: (initialAccount?.fdType as FDType) || 'cumulative',
+    principalRupees: initialAccount?.principalPaise
+      ? (initialAccount.principalPaise / 100).toString()
+      : '100000',
+    ratePercent: (initialAccount?.interestRate || 7.1).toString(),
+    compounding: (initialAccount?.compoundingFrequency || 'quarterly') as FDCompounding,
+    startDate: initialAccount?.startDate || trackingStartDate,
+    maturityDate: initialAccount?.maturityDate || addMonthsToDate(initialAccount?.startDate || trackingStartDate, 12),
+    tenureYears: (initialAccount?.tenureYears || 1).toString(),
+    tenureMonths: (initialAccount?.tenureMonths || 0).toString(),
+    tenureDays: (initialAccount?.tenureDays || 0).toString(),
+    accrualMode: (initialAccount?.accrualMode as FDAccrualMode) || 'bank',
+    maturityAmountReceiptRupees: initialAccount?.maturityAmountPerReceipt
+      ? (initialAccount.maturityAmountPerReceipt / 100).toString()
+      : '',
+    payoutFrequency: (initialAccount?.payoutFrequency as FDPayoutFrequency) || 'quarterly',
+    payoutAccountId: initialAccount?.payoutAccountId || '',
+  }));
 
   // RD-specific state
   const [installmentDay, setInstallmentDay] = useState<number | 'last'>(
@@ -159,19 +179,19 @@ export function AccountFormDialog({
       balancePaise = -owedPaise;
       emiPaise = Math.abs(toPaise(emi));
     } else if (kind === 'fixed_deposit') {
-      principalPaise = Math.abs(toPaise(principal));
+      principalPaise = Math.abs(toPaise(fdValues.principalRupees));
       balancePaise = principalPaise;
       currentValuePaise = currentValue ? Math.abs(toPaise(currentValue)) : undefined;
 
-      if (!startDate) {
+      if (!fdValues.startDate) {
         setFormError('Start date is required for Fixed Deposits');
         return;
       }
-      if (!maturityDate) {
+      if (!fdValues.maturityDate) {
         setFormError('Maturity date is required for Fixed Deposits');
         return;
       }
-      if (maturityDate <= startDate) {
+      if (fdValues.maturityDate <= fdValues.startDate) {
         setFormError('Maturity date must be after the start date');
         return;
       }
@@ -213,11 +233,31 @@ export function AccountFormDialog({
       isOffsetDays: kind === 'credit_card' ? true : undefined,
       principalPaise,
       monthlyInstallmentPaise,
-      interestRate: rateNum !== undefined && !Number.isNaN(rateNum) ? rateNum : undefined,
-      compoundingFrequency: compounding,
-      startDate: startDate || undefined,
-      maturityDate: maturityDate || undefined,
-      tenureMonths: tenureNum && tenureNum > 0 ? tenureNum : undefined,
+      interestRate:
+        kind === 'fixed_deposit'
+          ? parseFloat(fdValues.ratePercent) || 7.1
+          : rateNum !== undefined && !Number.isNaN(rateNum)
+          ? rateNum
+          : undefined,
+      compoundingFrequency: kind === 'fixed_deposit' ? fdValues.compounding : compounding,
+      startDate: kind === 'fixed_deposit' ? fdValues.startDate : startDate || undefined,
+      maturityDate: kind === 'fixed_deposit' ? fdValues.maturityDate : maturityDate || undefined,
+      tenureYears: kind === 'fixed_deposit' ? parseInt(fdValues.tenureYears, 10) || 0 : undefined,
+      tenureMonths:
+        kind === 'fixed_deposit'
+          ? parseInt(fdValues.tenureMonths, 10) || 0
+          : tenureNum && tenureNum > 0
+          ? tenureNum
+          : undefined,
+      tenureDays: kind === 'fixed_deposit' ? parseInt(fdValues.tenureDays, 10) || 0 : undefined,
+      fdType: kind === 'fixed_deposit' ? fdValues.fdType : undefined,
+      accrualMode: kind === 'fixed_deposit' ? fdValues.accrualMode : undefined,
+      maturityAmountPerReceipt:
+        kind === 'fixed_deposit' && fdValues.maturityAmountReceiptRupees
+          ? Math.abs(toPaise(fdValues.maturityAmountReceiptRupees))
+          : undefined,
+      payoutFrequency: kind === 'fixed_deposit' ? fdValues.payoutFrequency : undefined,
+      payoutAccountId: kind === 'fixed_deposit' ? fdValues.payoutAccountId || null : undefined,
       currentValuePaise,
       totalInvestedPaise,
       emiPaise,
@@ -245,7 +285,7 @@ export function AccountFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold">
             {initialAccount ? 'Edit Account' : 'Add New Account'}
@@ -425,102 +465,11 @@ export function AccountFormDialog({
 
           {/* Fixed Deposit Specific Fields */}
           {kind === 'fixed_deposit' && (
-            <div className="space-y-3 p-3 rounded-lg bg-muted/40 border">
-              <div className="space-y-1.5">
-                <Label htmlFor="acc-principal" className="text-xs font-semibold">
-                  Deposit Principal (₹)
-                </Label>
-                <Input
-                  id="acc-principal"
-                  placeholder="e.g. 1,00,000"
-                  value={principal}
-                  onChange={(e) => setPrincipal(e.target.value)}
-                  className="text-xs"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="acc-rate" className="text-xs font-semibold">
-                    Interest Rate (% p.a.)
-                  </Label>
-                  <Input
-                    id="acc-rate"
-                    placeholder="7.5"
-                    value={interestRate}
-                    onChange={(e) => setInterestRate(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Compounding</Label>
-                  <Select
-                    items={[
-                      { value: 'quarterly', label: 'Quarterly (Indian Default)' },
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'half_yearly', label: 'Half-yearly' },
-                      { value: 'yearly', label: 'Yearly' },
-                      { value: 'simple', label: 'Simple Interest' },
-                    ]}
-                    value={compounding}
-                    onValueChange={(val) => setCompounding(val as CompoundingFrequency)}
-                  >
-                    <SelectTrigger className="text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="quarterly">Quarterly (Indian Default)</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="half_yearly">Half-yearly</SelectItem>
-                      <SelectItem value="yearly">Yearly</SelectItem>
-                      <SelectItem value="simple">Simple Interest</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="acc-start" className="text-xs font-semibold">
-                    Start Date
-                  </Label>
-                  <DatePicker
-                    id="acc-start"
-                    value={startDate}
-                    onChange={setStartDate}
-                    className="text-xs"
-                    placeholder="Select start date"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="acc-maturity" className="text-xs font-semibold">
-                    Maturity Date
-                  </Label>
-                  <DatePicker
-                    id="acc-maturity"
-                    value={maturityDate}
-                    onChange={setMaturityDate}
-                    className="text-xs"
-                    placeholder="Select maturity date"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5 pt-1">
-                <Label htmlFor="acc-cur-val" className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <span>Current Value as of tracking start date (Optional)</span>
-                </Label>
-                <Input
-                  id="acc-cur-val"
-                  placeholder="Leave empty to auto-calculate with interest formula"
-                  value={currentValue}
-                  onChange={(e) => setCurrentValue(e.target.value)}
-                  className="text-xs"
-                />
-              </div>
+            <div data-testid="kind-fields-fd">
+              <FDFormFields
+                values={fdValues}
+                onChange={(patch) => setFdValues((prev) => ({ ...prev, ...patch }))}
+              />
             </div>
           )}
 

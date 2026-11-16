@@ -3,3 +3,4 @@ export * from './presets';
 export * from './date-math';
 export * from './generator';
 export * from './repository';
+export * from './lazy';

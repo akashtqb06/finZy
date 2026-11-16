@@ -567,13 +567,23 @@ export class MockFinanceService implements FinanceService {
       toAccountId: validated.toAccountId || null,
       categoryId: validated.categoryId || null,
       type: validated.type,
+      subType: validated.subType || null,
       amount: validated.amount,
+      amountType: validated.amountType || 'fixed',
       payee: validated.payee || null,
       note: validated.note || null,
       frequency: validated.frequency,
       interval: validated.interval || 1,
+      weekdays: validated.weekdays || null,
+      dayOfMonth: validated.dayOfMonth || null,
+      monthOfYear: validated.monthOfYear || null,
       startDate: validated.startDate,
       endDate: validated.endDate || null,
+      maxOccurrences: validated.maxOccurrences || null,
+      occurrencesCount: 0,
+      mode: validated.mode || 'auto_post',
+      skippedDates: [],
+      history: [],
       nextOccurrence: validated.nextOccurrence || validated.startDate,
       isActive: true,
       createdAt: now,
@@ -857,12 +867,14 @@ export class MockFinanceService implements FinanceService {
 
     for (const rule of this.recurringRules.values()) {
       if (rule.isActive && rule.nextOccurrence <= today) {
+        const txnType: 'expense' | 'income' | 'transfer' =
+          rule.type === 'contribution' ? 'expense' : (rule.type as 'expense' | 'income' | 'transfer');
         await this.createTransaction(rule.userId, {
           accountId: rule.accountId,
           toAccountId: rule.toAccountId,
           categoryId: rule.categoryId,
           date: rule.nextOccurrence,
-          type: rule.type,
+          type: txnType,
           amount: rule.amount,
           payee: rule.payee,
           note: rule.note,

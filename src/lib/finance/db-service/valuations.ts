@@ -3,9 +3,17 @@ import { db, finAccounts, finTransactions, finValuations } from '@src/lib/db';
 import { NotFoundError } from '@src/app/api/utils';
 import { incrementDataVersion } from './sync';
 import {
-  calculateFDAccruedValue,
-  normalizeInterestRate,
+  addMonthsToDate,
 } from '../domain/deposits';
+import {
+  calculateFDValue,
+  type FDConfig,
+  type FDType,
+  type FDCompounding,
+  type FDAccrualMode,
+  type FDDayCount,
+  type FDPayoutFrequency,
+} from '../domain/fd';
 import {
   rdValue,
   deriveMaturityDate,
@@ -14,7 +22,6 @@ import {
   type RDDayHistoryItem,
   type RDLatePaymentItem,
 } from '../domain/rd';
-import type { CompoundingFrequency } from '../constants';
 import {
   type CreateValuationDTO,
   type ValuationDTO,
@@ -155,7 +162,6 @@ export async function recomputeDepositValuations(
         : String(account.createdAt).slice(0, 10));
     const tenureMonths = Number(meta.tenureMonths || meta.tenure || 12);
     const rawRate = Number(meta.interestRate ?? meta.annualInterestRate ?? meta.rate ?? 0.07);
-    const interestRate = normalizeInterestRate(rawRate);
 
     // Fetch existing manual valuations to avoid overwriting them
     const existingValuations = await db
@@ -183,30 +189,51 @@ export async function recomputeDepositValuations(
       );
       if (principal <= 0) continue;
 
-      const compoundingFrequency = (meta.compoundingFrequency ??
-        meta.compounding ??
-        'quarterly') as CompoundingFrequency;
+      const fdType = (meta.fdType as FDType) || 'cumulative';
+      const compounding = (meta.compounding ??
+        meta.compoundingFrequency ??
+        'quarterly') as FDCompounding;
+      const accrualMode = (meta.accrualMode as FDAccrualMode) || 'bank';
+      const dayCount = (meta.dayCount as FDDayCount) || 'act_365';
+      const ratePercent = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
+      const maturityDate =
+        (meta.maturityDate as string) || addMonthsToDate(startDate, tenureMonths);
 
-      const todayValue = calculateFDAccruedValue({
+      const fdConfig: FDConfig = {
         principal,
-        annualInterestRate: interestRate,
-        compoundingFrequency,
+        ratePercent,
         startDate,
-        tenureMonths,
-        asOfDate: today,
+        maturityDate,
+        fdType,
+        compounding,
+        accrualMode,
+        dayCount,
+        maturityAmountPerReceipt: meta.maturityAmountPerReceipt
+          ? Number(meta.maturityAmountPerReceipt)
+          : undefined,
         manualAnchor,
-      });
+        payoutFrequency: meta.payoutFrequency as FDPayoutFrequency | undefined,
+        payoutAccountId: meta.payoutAccountId as string | undefined,
+      };
 
-      valuationPoints.push({ date: today, value: todayValue });
+      const fdValuation = calculateFDValue(fdConfig, today);
+      valuationPoints.push({ date: today, value: fdValuation.currentValue });
 
       // Idempotently normalize metadata
       const updatedMeta = {
         ...meta,
+        fdType,
+        principal,
         principalPaise: principal,
-        interestRate: rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2)),
-        compoundingFrequency,
+        ratePercent,
+        interestRate: ratePercent,
+        compounding,
+        compoundingFrequency: compounding,
         startDate,
+        maturityDate,
         tenureMonths,
+        accrualMode,
+        dayCount,
       };
       await db
         .update(finAccounts)

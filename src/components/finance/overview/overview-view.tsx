@@ -17,7 +17,10 @@ import {
   CalendarIcon,
   ShieldCheckIcon,
   InfoIcon,
+  RepeatIcon,
 } from 'lucide-react';
+import { projectUpcomingOccurrences } from '@src/lib/finance/recurring/date-math';
+import type { OccurrenceProjection } from '@src/lib/finance/recurring/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -37,6 +40,7 @@ import {
 } from '@/components/ui/select';
 import { useFinanceStore } from '../shared/finance-store';
 import { formatINR, formatPercent } from '../shared/format';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { FinancePageSkeleton } from '../shared/finance-skeleton';
 import { FinanceAreaChart, FinanceDonutChart, type FinanceDonutItem } from '../charts';
 import { cn } from '@/lib/utils';
@@ -54,6 +58,7 @@ import { getCategoryColorMap } from '@src/lib/finance/colors';
 export function OverviewView() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
 
   const {
     accounts,
@@ -87,6 +92,30 @@ export function OverviewView() {
 
   // EPS net worth setting state
   const [includeEps, setIncludeEps] = useState(false);
+  const [upcomingRecurring, setUpcomingRecurring] = useState<OccurrenceProjection[]>([]);
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadUpcomingRecurring() {
+      try {
+        const res = await fetch('/api/finance/recurring');
+        if (res.ok) {
+          const json = await res.json();
+          if (!ignore && Array.isArray(json.rules)) {
+            const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+            const proj = projectUpcomingOccurrences(json.rules, today, 7);
+            setUpcomingRecurring(proj);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    void loadUpcomingRecurring();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -231,7 +260,7 @@ export function OverviewView() {
     return accounts
       .filter((a) => a.class === 'asset')
       .reduce((sum, a) => {
-        let val = a.currentValue || a.balance;
+        let val = a.accruedValue ?? a.currentValue ?? a.balance;
         if (includeEps && (a.kind === 'epf' || a.kind === 'vpf') && a.pensionMemo) {
           val += a.pensionMemo;
         }
@@ -259,6 +288,13 @@ export function OverviewView() {
     return accounts
       .filter((a) => a.kind === 'recurring_deposit' && a.nextInstallmentDate)
       .sort((a, b) => (a.nextInstallmentDate || '').localeCompare(b.nextInstallmentDate || ''));
+  }, [accounts]);
+
+  // Upcoming FD maturities (as of today)
+  const upcomingFDMaturities = useMemo(() => {
+    return accounts
+      .filter((a) => a.kind === 'fixed_deposit' && a.maturityDate)
+      .sort((a, b) => (a.maturityDate || '').localeCompare(b.maturityDate || ''));
   }, [accounts]);
 
   // Balances by account kind (as of today)
@@ -465,11 +501,11 @@ export function OverviewView() {
         {/* Filter Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-xl border bg-muted/40 text-xs">
           {/* Preset Buttons */}
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
             <button
               type="button"
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors shrink-0 font-medium',
+                'px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 font-medium text-xs',
                 activePreset === 'this_month'
                   ? 'bg-background text-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -481,7 +517,7 @@ export function OverviewView() {
             <button
               type="button"
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors shrink-0 font-medium',
+                'px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 font-medium text-xs',
                 activePreset === 'last_month'
                   ? 'bg-background text-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -493,7 +529,7 @@ export function OverviewView() {
             <button
               type="button"
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors shrink-0 font-medium',
+                'px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 font-medium text-xs',
                 activePreset === 'last_3_months'
                   ? 'bg-background text-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -505,7 +541,7 @@ export function OverviewView() {
             <button
               type="button"
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors shrink-0 font-medium',
+                'px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 font-medium text-xs',
                 activePreset === 'this_year'
                   ? 'bg-background text-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -517,7 +553,7 @@ export function OverviewView() {
             <button
               type="button"
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors shrink-0 font-medium',
+                'px-3 py-1.5 min-h-[36px] rounded-lg transition-colors shrink-0 font-medium text-xs',
                 activePreset === 'custom'
                   ? 'bg-background text-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
@@ -708,13 +744,14 @@ export function OverviewView() {
           <FinanceAreaChart
             data={netWorthPoints}
             label="Net Worth"
-            height={180}
+            height={isMobile ? 180 : 200}
+            tickCount={isMobile ? 3 : 5}
           />
         </div>
       </div>
 
       {/* Period-based Comparison Cards (Income, Expense, Savings Rate) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Income */}
         <div className="p-4 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
@@ -824,7 +861,7 @@ export function OverviewView() {
         </div>
 
         {/* Savings Rate */}
-        <div className="p-4 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
+        <div className="col-span-2 sm:col-span-1 p-4 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-xs font-medium text-muted-foreground truncate">Period Savings Rate</span>
@@ -971,23 +1008,51 @@ export function OverviewView() {
             <div className="flex items-center gap-2">
               <CreditCardIcon className="size-4 text-purple-500" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Upcoming Dues & Deposits
+                Upcoming (Next 7 Days) & Dues
               </h3>
               <span className="text-[10px] text-muted-foreground font-medium">
                 (as of today)
               </span>
             </div>
             <span className="text-xs text-muted-foreground">
-              {upcomingCardDues.length + upcomingRDInstallments.length} pending
+              {upcomingCardDues.length + upcomingRDInstallments.length + upcomingFDMaturities.length + upcomingRecurring.length} pending
             </span>
           </div>
 
-          {upcomingCardDues.length === 0 && upcomingRDInstallments.length === 0 ? (
+          {upcomingCardDues.length === 0 &&
+          upcomingRDInstallments.length === 0 &&
+          upcomingFDMaturities.length === 0 &&
+          upcomingRecurring.length === 0 ? (
             <div className="py-8 text-center text-xs text-muted-foreground">
-              No upcoming card dues or deposit installments! You are all caught up.
+              No upcoming card dues, deposits, or recurring items in the next 7 days! You are all caught up.
             </div>
           ) : (
             <div className="divide-y divide-border/60">
+              {upcomingRecurring.map((item) => (
+                <div
+                  key={item.id}
+                  className="py-2.5 flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <RepeatIcon className="size-4 text-primary shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-foreground">{item.ruleName}</h4>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        Due on <strong className="text-foreground">{item.date}</strong> ({item.daysUntil === 0 ? 'Today' : `in ${item.daysUntil} day${item.daysUntil > 1 ? 's' : ''}`})
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold font-mono ${item.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'}`}>
+                      {item.type === 'income' ? '+' : ''}{formatINR(item.amount)}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {item.type}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
               {upcomingCardDues.map((card) => (
                 <div
                   key={card.id}
@@ -1047,6 +1112,45 @@ export function OverviewView() {
                       render={<Link href={`/finance/accounts/${rd.id}`} />}
                     >
                       View RD
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {upcomingFDMaturities.map((fd) => (
+                <div
+                  key={fd.id}
+                  className="py-2.5 flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <PiggyBankIcon className="size-4 text-amber-500 shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-foreground">{fd.name}</h4>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        Matures on <strong className="text-foreground">{fd.maturityDate}</strong>
+                        {fd.daysToMaturity !== undefined ? (
+                          <span> ({fd.daysToMaturity <= 0 ? 'Matured' : `${fd.daysToMaturity}d left`})</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="font-bold text-foreground">
+                        {formatINR(fd.accruedValue ?? fd.currentValue ?? fd.balance)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Current Value
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs font-medium"
+                      render={<Link href={`/finance/accounts/${fd.id}`} />}
+                    >
+                      View FD
                     </Button>
                   </div>
                 </div>

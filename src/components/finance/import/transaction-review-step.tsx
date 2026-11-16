@@ -5,13 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   ArrowLeftIcon,
   CheckCircle2Icon,
   CopyIcon,
@@ -479,6 +472,27 @@ export function TransactionReviewStep({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Sticky Mobile Commit Bar */}
+      <div className="md:hidden sticky bottom-[calc(var(--bottom-nav-h,56px)+8px)] z-30 p-3 rounded-xl border bg-background/95 backdrop-blur-md shadow-lg flex items-center justify-between gap-3">
+        <div className="text-xs">
+          <span className="font-bold text-foreground">{summary.included}</span>
+          <span className="text-muted-foreground"> ready to import</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onBack} disabled={isSubmitting} className="h-8 text-xs">
+            Back
+          </Button>
+          <Button
+            size="sm"
+            onClick={onCommit}
+            disabled={isSubmitting || summary.included === 0}
+            className="h-8 text-xs bg-primary text-primary-foreground font-medium shadow-xs"
+          >
+            {isSubmitting ? 'Importing...' : `Import ${summary.included}`}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -693,6 +693,37 @@ export function InboxView() {
           </div>
         </div>
 
+        {/* Sticky Mobile Selection Actions */}
+        {selectedIds.size > 0 && (
+          <div className="md:hidden sticky bottom-[calc(var(--bottom-nav-h,56px)+8px)] z-30 p-2.5 rounded-xl border bg-background/95 backdrop-blur-md shadow-lg flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-foreground">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkReject}
+                disabled={isActing}
+                className="h-8 text-xs px-2.5"
+              >
+                <XCircleIcon className="size-3.5 mr-1" />
+                Reject
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleBulkApprove}
+                disabled={isActing}
+                className="h-8 text-xs px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <CheckCheckIcon className="size-3.5 mr-1" />
+                Approve
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Rule Learning Dialog */}
         <Dialog open={Boolean(rulePrompt)} onOpenChange={(open) => !open && setRulePrompt(null)}>
           <DialogContent className="sm:max-w-md">

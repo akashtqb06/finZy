@@ -219,6 +219,20 @@ export async function approveItems(
       const payee = approval.payee ?? inboxItem.merchant ?? null;
       const note = approval.note ?? inboxItem.description ?? null;
 
+      let isRecurring = false;
+      let recurringRuleId: string | null = null;
+      if (inboxItem.source === 'recurring') {
+        isRecurring = true;
+        try {
+          const parsedRaw = JSON.parse(inboxItem.raw || '{}');
+          if (parsedRaw.ruleId) {
+            recurringRuleId = parsedRaw.ruleId;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // Create transaction
       await trx.insert(finTransactions).values({
         id: txnId,
@@ -233,6 +247,8 @@ export async function approveItems(
         note: note ?? undefined,
         importHash: inboxItem.importHash ?? undefined,
         clientRequestId: inboxItem.idempotencyKey,
+        isRecurring,
+        recurringRuleId: recurringRuleId ?? undefined,
       });
 
       // Update inbox item

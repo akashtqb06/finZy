@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { UnauthorizedError } from '@src/lib/auth/policy';
 
 export function assertCronAuthorized(request: Request): void {
@@ -12,10 +13,18 @@ export function assertCronAuthorized(request: Request): void {
     : undefined;
   const headerSecret = request.headers.get('x-cron-secret');
 
-  if (bearerToken === secret || headerSecret === secret) {
-    return;
+  const candidate = bearerToken ?? headerSecret;
+  if (!candidate) {
+    throw new UnauthorizedError('Invalid or missing cron authentication');
   }
 
-  throw new UnauthorizedError('Invalid or missing cron authentication');
-}
+  const candidateBuf = Buffer.from(candidate);
+  const secretBuf = Buffer.from(secret);
 
+  if (
+    candidateBuf.length !== secretBuf.length ||
+    !crypto.timingSafeEqual(candidateBuf, secretBuf)
+  ) {
+    throw new UnauthorizedError('Invalid or missing cron authentication');
+  }
+}

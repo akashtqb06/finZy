@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import { RDFormFields } from './rd-form-fields';
+import { FDFormFields, type FDFormValues } from './fd-form-fields';
+import { addMonthsToDate } from '@src/lib/finance/domain/deposits';
 import type { RDCompounding, RDFirstInstallmentOn } from '@src/lib/finance/domain/rd';
 import { rupeesToPaise } from '../shared/format';
 import { todayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
@@ -36,11 +38,28 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
     const [dueDays, setDueDays] = useState('20');
 
     // Deposit fields (FD/RD)
+    const [fdValues, setFdValues] = useState<FDFormValues>(() => {
+        const today = todayInTz(DEFAULT_TZ);
+        return {
+            fdType: 'cumulative',
+            principalRupees: '100000',
+            ratePercent: '7.1',
+            compounding: 'quarterly',
+            startDate: today,
+            maturityDate: addMonthsToDate(today, 12),
+            tenureYears: '1',
+            tenureMonths: '0',
+            tenureDays: '0',
+            accrualMode: 'bank',
+            maturityAmountReceiptRupees: '',
+            payoutFrequency: 'quarterly',
+            payoutAccountId: '',
+        };
+    });
     const [principalRupees, setPrincipalRupees] = useState('');
     const [rate, setRate] = useState('');
     const [compounding, setCompounding] = useState<RDCompounding>('quarterly');
     const [startDate, setStartDate] = useState(() => todayInTz(DEFAULT_TZ));
-    const [maturityDate, setMaturityDate] = useState('');
     const [tenureMonths, setTenureMonths] = useState('12');
 
     // RD-specific fields
@@ -105,12 +124,31 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                 metadata.dueDays = due;
                 metadata.isOffsetDays = true;
             } else if (kind === 'fixed_deposit') {
-                openingPaise = principalRupees ? rupeesToPaise(parseFloat(principalRupees)) : 0;
-                metadata.principal = openingPaise;
-                metadata.rate = parseFloat(rate) || 0;
-                metadata.compounding = compounding;
-                metadata.startDate = startDate;
-                metadata.maturityDate = maturityDate;
+                const principal = fdValues.principalRupees ? rupeesToPaise(parseFloat(fdValues.principalRupees)) : 0;
+                openingPaise = principal;
+                const ratePercent = parseFloat(fdValues.ratePercent) || 7.1;
+
+                metadata.fdType = fdValues.fdType;
+                metadata.principal = principal;
+                metadata.principalPaise = principal;
+                metadata.ratePercent = ratePercent;
+                metadata.interestRate = ratePercent;
+                metadata.compounding = fdValues.compounding;
+                metadata.compoundingFrequency = fdValues.compounding;
+                metadata.startDate = fdValues.startDate;
+                metadata.maturityDate = fdValues.maturityDate;
+                metadata.tenureYears = parseInt(fdValues.tenureYears, 10) || 0;
+                metadata.tenureMonths = parseInt(fdValues.tenureMonths, 10) || 0;
+                metadata.tenureDays = parseInt(fdValues.tenureDays, 10) || 0;
+                metadata.accrualMode = fdValues.accrualMode;
+                metadata.dayCount = 'act_365';
+                if (fdValues.maturityAmountReceiptRupees) {
+                    metadata.maturityAmountPerReceipt = rupeesToPaise(parseFloat(fdValues.maturityAmountReceiptRupees));
+                }
+                if (fdValues.fdType === 'payout') {
+                    metadata.payoutFrequency = fdValues.payoutFrequency;
+                    metadata.payoutAccountId = fdValues.payoutAccountId || (bankAccounts[0]?.id ?? null);
+                }
             } else if (kind === 'recurring_deposit') {
                 openingPaise = principalRupees ? rupeesToPaise(parseFloat(principalRupees)) : 0;
                 const normRate = parseFloat(rate) || 6.8;
@@ -374,88 +412,12 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
 
             {/* Fixed Deposit Fields */}
             {kind === 'fixed_deposit' && (
-                <div data-testid="kind-fields-fd" className="space-y-3 pt-2 border-t">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fd-principal" className="text-xs font-medium text-muted-foreground">
-                                Principal Deposit Amount (₹)
-                            </Label>
-                            <Input
-                                id="fd-principal"
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="100000"
-                                className="h-9 text-xs bg-card"
-                                value={principalRupees}
-                                onChange={(e) => setPrincipalRupees(e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fd-rate" className="text-xs font-medium text-muted-foreground">
-                                Annual Interest Rate (%)
-                            </Label>
-                            <Input
-                                id="fd-rate"
-                                type="number"
-                                inputMode="decimal"
-                                step="0.05"
-                                placeholder="7.25"
-                                className="h-9 text-xs bg-card"
-                                value={rate}
-                                onChange={(e) => setRate(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fd-compounding" className="text-xs font-medium text-muted-foreground">
-                                Compounding
-                            </Label>
-                            <Select
-                                items={[
-                                    { value: 'quarterly', label: 'Quarterly (Bank Default)' },
-                                    { value: 'monthly', label: 'Monthly' },
-                                    { value: 'yearly', label: 'Yearly' },
-                                ]}
-                                value={compounding}
-                                onValueChange={(val) => setCompounding(val as typeof compounding)}
-                            >
-                                <SelectTrigger id="fd-compounding" className="w-full h-9 bg-card px-2 text-xs">
-                                    <SelectValue placeholder="Select compounding" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="quarterly">Quarterly (Bank Default)</SelectItem>
-                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                    <SelectItem value="yearly">Yearly</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fd-start" className="text-xs font-medium text-muted-foreground">
-                                Start Date
-                            </Label>
-                            <DatePicker
-                                id="fd-start"
-                                className="h-9 text-xs bg-card"
-                                value={startDate}
-                                onChange={setStartDate}
-                                placeholder="Select start date"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="fd-maturity" className="text-xs font-medium text-muted-foreground">
-                                Maturity Date
-                            </Label>
-                            <DatePicker
-                                id="fd-maturity"
-                                className="h-9 text-xs bg-card"
-                                value={maturityDate}
-                                onChange={setMaturityDate}
-                                placeholder="Select maturity date"
-                            />
-                        </div>
-                    </div>
+                <div data-testid="kind-fields-fd">
+                    <FDFormFields
+                        values={fdValues}
+                        onChange={(patch) => setFdValues((prev) => ({ ...prev, ...patch }))}
+                        bankAccounts={bankAccounts}
+                    />
                 </div>
             )}
 
@@ -603,7 +565,7 @@ export function AddAccountDialog({ open, onOpenChange }: { open: boolean; onOpen
     if (isMobile) {
         return (
             <Sheet open={open} onOpenChange={handleOpenChange}>
-                <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+                <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] overflow-y-auto px-4 pb-6">
                     <SheetHeader className="text-left pb-2">
                         <SheetTitle className="text-base font-bold">Add Account</SheetTitle>
                         <SheetDescription className="text-xs">

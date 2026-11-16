@@ -22,6 +22,7 @@ import {
   ChevronsDownUpIcon,
   CopyIcon,
   CheckIcon,
+  XIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import { todayInTz, yesterdayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
 import { formatINR } from '../shared/format';
@@ -150,6 +158,10 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
 
   // Row selection
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  const isMobile = useIsMobile();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileDetailTx, setMobileDetailTx] = useState<TransactionDTO | null>(null);
 
   // Collapsed day groups & expanded row details
   const [collapsedDayMap, setCollapsedDayMap] = useState<Record<string, boolean>>({});
@@ -490,105 +502,155 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-3 w-full">
-      {/* Top Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-        <div className="relative flex-1 max-w-md">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search payee, note, tags, category..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8.5 h-9 text-xs bg-card"
-          />
-        </div>
+      {/* Top Search & Filter Bar (Sticky on mobile) */}
+      <div className="sticky top-0 bg-background/95 backdrop-blur-md z-10 py-1.5 -mx-1 px-1 sm:static sm:py-0 sm:mx-0 sm:px-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="relative flex-1 max-w-md">
+            <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search payee, note, tags, category..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8.5 h-10 sm:h-9 text-base sm:text-xs bg-card"
+            />
+          </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          {/* Quick Date Presets */}
-          <Select
-            items={[
-              { value: 'all', label: 'All Dates' },
-              { value: 'today', label: 'Today' },
-              { value: 'yesterday', label: 'Yesterday' },
-              { value: 'week', label: 'This Week' },
-              { value: 'month', label: 'This Month' },
-              { value: 'last30', label: 'Last 30 Days' },
-              { value: 'custom', label: 'Custom Range...' },
-            ]}
-            value={datePreset}
-            onValueChange={(val) => setDatePreset(val as typeof datePreset)}
-          >
-            <SelectTrigger className="h-9 bg-card px-2.5 text-xs text-muted-foreground focus:text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Dates</SelectItem>
-              <SelectItem value="today" className="text-xs">Today</SelectItem>
-              <SelectItem value="yesterday" className="text-xs">Yesterday</SelectItem>
-              <SelectItem value="week" className="text-xs">This Week</SelectItem>
-              <SelectItem value="month" className="text-xs">This Month</SelectItem>
-              <SelectItem value="last30" className="text-xs">Last 30 Days</SelectItem>
-              <SelectItem value="custom" className="text-xs">Custom Range...</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {/* Quick Date Presets (Desktop) */}
+            <div className="hidden sm:block">
+              <Select
+                items={[
+                  { value: 'all', label: 'All Dates' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: 'week', label: 'This Week' },
+                  { value: 'month', label: 'This Month' },
+                  { value: 'last30', label: 'Last 30 Days' },
+                  { value: 'custom', label: 'Custom Range...' },
+                ]}
+                value={datePreset}
+                onValueChange={(val) => setDatePreset(val as typeof datePreset)}
+              >
+                <SelectTrigger className="h-9 bg-card px-2.5 text-xs text-muted-foreground focus:text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All Dates</SelectItem>
+                  <SelectItem value="today" className="text-xs">Today</SelectItem>
+                  <SelectItem value="yesterday" className="text-xs">Yesterday</SelectItem>
+                  <SelectItem value="week" className="text-xs">This Week</SelectItem>
+                  <SelectItem value="month" className="text-xs">This Month</SelectItem>
+                  <SelectItem value="last30" className="text-xs">Last 30 Days</SelectItem>
+                  <SelectItem value="custom" className="text-xs">Custom Range...</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Type Filter */}
-          <Select
-            items={[
-              { value: 'all', label: 'All Types' },
-              { value: 'expense', label: 'Expenses' },
-              { value: 'income', label: 'Income' },
-              { value: 'transfer', label: 'Transfers' },
-            ]}
-            value={selectedType}
-            onValueChange={(val) => setSelectedType(val as typeof selectedType)}
-          >
-            <SelectTrigger className="h-9 bg-card px-2.5 text-xs text-muted-foreground focus:text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All Types</SelectItem>
-              <SelectItem value="expense" className="text-xs">Expenses</SelectItem>
-              <SelectItem value="income" className="text-xs">Income</SelectItem>
-              <SelectItem value="transfer" className="text-xs">Transfers</SelectItem>
-            </SelectContent>
-          </Select>
+            {/* Type Filter (Desktop) */}
+            <div className="hidden sm:block">
+              <Select
+                items={[
+                  { value: 'all', label: 'All Types' },
+                  { value: 'expense', label: 'Expenses' },
+                  { value: 'income', label: 'Income' },
+                  { value: 'transfer', label: 'Transfers' },
+                ]}
+                value={selectedType}
+                onValueChange={(val) => setSelectedType(val as typeof selectedType)}
+              >
+                <SelectTrigger className="h-9 bg-card px-2.5 text-xs text-muted-foreground focus:text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All Types</SelectItem>
+                  <SelectItem value="expense" className="text-xs">Expenses</SelectItem>
+                  <SelectItem value="income" className="text-xs">Income</SelectItem>
+                  <SelectItem value="transfer" className="text-xs">Transfers</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Toggle More Filters */}
-          <Button
-            type="button"
-            variant={showFilters ? 'secondary' : 'outline'}
-            size="sm"
-            className="h-9 text-xs gap-1.5"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <FilterIcon className="size-3.5" />
-            <span className="hidden sm:inline">Filters</span>
-          </Button>
-
-          {(search || selectedAccountId !== 'all' || selectedCategoryId !== 'all' || selectedType !== 'all' || datePreset !== 'all' || minAmount || maxAmount) && (
+            {/* Toggle More Filters */}
             <Button
               type="button"
-              variant="ghost"
+              variant={showFilters || mobileFiltersOpen ? 'secondary' : 'outline'}
               size="sm"
-              className="h-9 text-xs gap-1 text-muted-foreground"
-              onClick={resetFilters}
-              title="Reset all filters"
+              className="h-10 sm:h-9 text-xs gap-1.5 min-h-[40px] sm:min-h-0"
+              onClick={() => {
+                if (isMobile) {
+                  setMobileFiltersOpen(true);
+                } else {
+                  setShowFilters(!showFilters);
+                }
+              }}
             >
-              <RotateCcwIcon className="size-3.5" />
-              <span className="hidden sm:inline">Reset</span>
+              <FilterIcon className="size-3.5" />
+              <span>Filters</span>
             </Button>
-          )}
 
-          <Button
-            type="button"
-            size="sm"
-            className="h-9 text-xs gap-1.5 shrink-0"
-            onClick={() => openQuickAdd()}
-          >
-            <PlusIcon className="size-3.5" />
-            <span>Add Transaction</span>
-          </Button>
+            {(search || selectedAccountId !== 'all' || selectedCategoryId !== 'all' || selectedType !== 'all' || datePreset !== 'all' || minAmount || maxAmount) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-10 sm:h-9 text-xs gap-1 text-muted-foreground min-h-[40px] sm:min-h-0"
+                onClick={resetFilters}
+                title="Reset all filters"
+              >
+                <RotateCcwIcon className="size-3.5" />
+                <span>Reset</span>
+              </Button>
+            )}
+
+            {/* Desktop Add Transaction Button only */}
+            <Button
+              type="button"
+              size="sm"
+              className="hidden sm:inline-flex h-9 text-xs gap-1.5 shrink-0"
+              onClick={() => openQuickAdd({ accountId: accountId || (selectedAccountId !== 'all' ? selectedAccountId : undefined) })}
+            >
+              <PlusIcon className="size-3.5" />
+              <span>Add Transaction</span>
+            </Button>
+          </div>
         </div>
+
+        {/* Active Filters Chip Row */}
+        {(selectedAccountId !== 'all' || selectedCategoryId !== 'all' || selectedType !== 'all' || datePreset !== 'all' || search.trim() || minAmount || maxAmount) && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1.5 pb-0.5">
+            <span className="text-[10px] text-muted-foreground uppercase font-medium shrink-0">Active:</span>
+            {search.trim() && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0" onClick={() => setSearch('')}>
+                &quot;{search}&quot; <XIcon className="size-3" />
+              </Badge>
+            )}
+            {selectedAccountId !== 'all' && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0" onClick={() => setSelectedAccountId('all')}>
+                {accounts.find((a) => a.id === selectedAccountId)?.name || 'Account'} <XIcon className="size-3" />
+              </Badge>
+            )}
+            {selectedCategoryId !== 'all' && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0" onClick={() => setSelectedCategoryId('all')}>
+                {categories.find((c) => c.id === selectedCategoryId)?.name || 'Category'} <XIcon className="size-3" />
+              </Badge>
+            )}
+            {selectedType !== 'all' && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0 capitalize" onClick={() => setSelectedType('all')}>
+                {selectedType} <XIcon className="size-3" />
+              </Badge>
+            )}
+            {datePreset !== 'all' && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0 capitalize" onClick={() => setDatePreset('all')}>
+                {datePreset === 'last30' ? 'Last 30 Days' : datePreset} <XIcon className="size-3" />
+              </Badge>
+            )}
+            {(minAmount || maxAmount) && (
+              <Badge variant="secondary" className="text-[11px] gap-1 cursor-pointer shrink-0" onClick={() => { setMinAmount(''); setMaxAmount(''); }}>
+                Amount Filter <XIcon className="size-3" />
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Expanded Filters Drawer */}
@@ -841,7 +903,7 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
       </div>
 
       {/* Main Table Container: Fixed Height & Scrolling */}
-      <div className="flex-1 min-h-[420px] max-h-[calc(100vh-280px)] rounded-lg border bg-card overflow-y-auto">
+      <div className="flex-1 min-h-[420px] max-h-[calc(100dvh-280px)] rounded-lg border bg-card overflow-y-auto">
         {filteredTransactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <ArrowRightLeftIcon className="size-10 text-muted-foreground/40 mb-3" />
@@ -949,6 +1011,68 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
                               isRowExpanded && 'bg-muted/15'
                             )}
                           >
+                            {/* Mobile Compact List Row */}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setMobileDetailTx(tx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setMobileDetailTx(tx);
+                                }
+                              }}
+                              className="sm:hidden flex items-center justify-between p-3.5 min-h-[52px] hover:bg-muted/40 active:bg-muted transition-colors cursor-pointer text-xs gap-3 border-b"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className="size-2.5 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor:
+                                      category?.color ||
+                                      getDeterministicCategoryColor(category?.id || category?.name || tx.payee || tx.type),
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-foreground text-sm truncate max-w-[200px]" title={tx.payee || tx.type}>
+                                    {tx.payee || (tx.type === 'transfer' ? 'Transfer' : 'Unspecified Payee')}
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
+                                    <span>{account?.name || 'Account'}</span>
+                                    {toAccount && <span>→ {toAccount.name}</span>}
+                                    {category && <span>• {category.name}</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                {(() => {
+                                  const eff = tx.signedAmount;
+                                  return (
+                                    <div
+                                      className={cn(
+                                        'font-bold text-sm',
+                                        eff > 0
+                                          ? 'text-emerald-600 dark:text-emerald-400'
+                                          : eff < 0
+                                          ? 'text-foreground'
+                                          : 'text-muted-foreground'
+                                      )}
+                                    >
+                                      {formatINR(eff, { signDisplay: 'always' })}
+                                    </div>
+                                  );
+                                })()}
+                                {tx.runningBalance !== undefined && (
+                                  <div className="text-[10px] text-muted-foreground font-mono tabular-nums mt-0.5">
+                                    Bal: {formatINR(tx.runningBalance)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Desktop Full Table Row */}
+                            <div className="hidden sm:block">
                             <div
                               className={cn(
                                 'flex items-center justify-between px-4 py-2.5 hover:bg-muted/40 transition-colors text-xs gap-3',
@@ -1290,6 +1414,7 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
                                 </div>
                               </div>
                             )}
+                            </div>
                           </div>
                         );
                       })}
@@ -1397,6 +1522,256 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Mobile Transaction Detail Bottom Sheet */}
+      <Sheet open={Boolean(mobileDetailTx)} onOpenChange={(open) => !open && setMobileDetailTx(null)}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[88dvh] p-4 flex flex-col z-[75]">
+          <SheetHeader className="text-left pb-2 border-b">
+            <div className="flex items-center justify-between">
+              <Badge variant="outline" className="text-xs uppercase font-semibold">
+                {mobileDetailTx?.type}
+              </Badge>
+              <span className="text-xs text-muted-foreground">{mobileDetailTx?.date}</span>
+            </div>
+            <SheetTitle className="text-lg font-bold truncate mt-1">
+              {mobileDetailTx?.payee || (mobileDetailTx?.type === 'transfer' ? 'Transfer' : 'Transaction')}
+            </SheetTitle>
+          </SheetHeader>
+
+          {mobileDetailTx && (() => {
+            const acc = accounts.find((a) => a.id === mobileDetailTx.accountId);
+            const toAcc = mobileDetailTx.toAccountId ? accounts.find((a) => a.id === mobileDetailTx.toAccountId) : null;
+            const cat = categories.find((c) => c.id === mobileDetailTx.categoryId);
+            const eff = mobileDetailTx.signedAmount;
+
+            return (
+              <div className="space-y-4 py-3 flex-1 overflow-y-auto">
+                <div className="p-3 rounded-xl bg-muted/40 border">
+                  <div className="text-xs text-muted-foreground font-medium">Amount</div>
+                  <div
+                    className={cn(
+                      'text-2xl font-extrabold mt-0.5',
+                      eff > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground'
+                    )}
+                  >
+                    {formatINR(eff, { signDisplay: 'always' })}
+                  </div>
+                  {mobileDetailTx.runningBalance !== undefined && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Running Balance: <span className="font-semibold text-foreground font-mono">{formatINR(mobileDetailTx.runningBalance)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg border bg-card">
+                    <span className="text-[10px] text-muted-foreground block uppercase font-medium">Account</span>
+                    <span className="font-semibold text-foreground mt-0.5 block truncate">{acc?.name || '—'}</span>
+                    {toAcc && <span className="text-muted-foreground block truncate">→ {toAcc.name}</span>}
+                  </div>
+                  <div className="p-2.5 rounded-lg border bg-card">
+                    <span className="text-[10px] text-muted-foreground block uppercase font-medium">Category</span>
+                    <span className="font-semibold text-foreground mt-0.5 block truncate">{cat?.name || 'Uncategorized'}</span>
+                  </div>
+                </div>
+
+                {mobileDetailTx.note && (
+                  <div className="p-2.5 rounded-lg border bg-card text-xs">
+                    <span className="text-[10px] text-muted-foreground block uppercase font-medium">Note</span>
+                    <p className="text-foreground mt-0.5">{mobileDetailTx.note}</p>
+                  </div>
+                )}
+
+                {mobileDetailTx.tags && (
+                  <div className="p-2.5 rounded-lg border bg-card text-xs">
+                    <span className="text-[10px] text-muted-foreground block uppercase font-medium">Tags</span>
+                    <p className="text-foreground mt-0.5">{mobileDetailTx.tags}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[44px] text-xs font-semibold gap-1.5"
+                    onClick={() => {
+                      const t = mobileDetailTx;
+                      setMobileDetailTx(null);
+                      setEditingTx(t);
+                    }}
+                  >
+                    <Edit2Icon className="size-3.5" />
+                    <span>Edit</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="min-h-[44px] text-xs font-semibold gap-1.5"
+                    onClick={async () => {
+                      const t = mobileDetailTx;
+                      setMobileDetailTx(null);
+                      if (t) {
+                        await deleteTransaction(t.id);
+                        toast.success('Transaction deleted');
+                      }
+                    }}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                    <span>Delete</span>
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
+
+      {/* Mobile Filters Bottom Sheet */}
+      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[85dvh] p-4 flex flex-col z-[75]">
+          <SheetHeader className="text-left pb-2 border-b">
+            <SheetTitle className="text-base font-bold">Filter Transactions</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4 py-3 flex-1 overflow-y-auto">
+            {!accountId && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Account</label>
+                <Select
+                  items={[
+                    { value: 'all', label: 'All Accounts' },
+                    ...accounts.map((a) => ({ value: a.id, label: a.name })),
+                  ]}
+                  value={selectedAccountId}
+                  onValueChange={(val) => setSelectedAccountId(val || 'all')}
+                >
+                  <SelectTrigger className="w-full min-h-[44px] h-11 bg-card px-3 text-base sm:text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-base sm:text-xs min-h-[44px]">All Accounts</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id} className="text-base sm:text-xs min-h-[44px]">
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Category</label>
+              <Select
+                items={[
+                  { value: 'all', label: 'All Categories' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+                value={selectedCategoryId}
+                onValueChange={(val) => setSelectedCategoryId(val || 'all')}
+              >
+                <SelectTrigger className="w-full min-h-[44px] h-11 bg-card px-3 text-base sm:text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-base sm:text-xs min-h-[44px]">All Categories</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-base sm:text-xs min-h-[44px]">
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Transaction Type</label>
+              <div className="grid grid-cols-4 gap-1 p-1 bg-muted rounded-lg text-xs font-medium">
+                {(['all', 'expense', 'income', 'transfer'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedType(t)}
+                    className={cn(
+                      'min-h-[40px] py-1.5 px-2 rounded-md transition-all text-center capitalize',
+                      selectedType === t ? 'bg-background text-foreground shadow-xs font-semibold' : 'text-muted-foreground'
+                    )}
+                  >
+                    {t === 'all' ? 'All' : t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Date Range</label>
+              <Select
+                items={[
+                  { value: 'all', label: 'All Dates' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: 'week', label: 'This Week' },
+                  { value: 'month', label: 'This Month' },
+                  { value: 'last30', label: 'Last 30 Days' },
+                  { value: 'custom', label: 'Custom Range...' },
+                ]}
+                value={datePreset}
+                onValueChange={(val) => setDatePreset(val as typeof datePreset)}
+              >
+                <SelectTrigger className="w-full min-h-[44px] h-11 bg-card px-3 text-base sm:text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-base sm:text-xs min-h-[44px]">All Dates</SelectItem>
+                  <SelectItem value="today" className="text-base sm:text-xs min-h-[44px]">Today</SelectItem>
+                  <SelectItem value="yesterday" className="text-base sm:text-xs min-h-[44px]">Yesterday</SelectItem>
+                  <SelectItem value="week" className="text-base sm:text-xs min-h-[44px]">This Week</SelectItem>
+                  <SelectItem value="month" className="text-base sm:text-xs min-h-[44px]">This Month</SelectItem>
+                  <SelectItem value="last30" className="text-base sm:text-xs min-h-[44px]">Last 30 Days</SelectItem>
+                  <SelectItem value="custom" className="text-base sm:text-xs min-h-[44px]">Custom Range...</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {datePreset === 'custom' && (
+              <div className="grid grid-cols-2 gap-2">
+                <DatePicker
+                  className="min-h-[44px] h-11 text-base sm:text-xs bg-card"
+                  value={customStartDate}
+                  onChange={setCustomStartDate}
+                  placeholder="From date"
+                />
+                <DatePicker
+                  className="min-h-[44px] h-11 text-base sm:text-xs bg-card"
+                  value={customEndDate}
+                  onChange={setCustomEndDate}
+                  placeholder="To date"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 min-h-[44px] text-xs"
+              onClick={() => {
+                resetFilters();
+                setMobileFiltersOpen(false);
+              }}
+            >
+              Reset
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 min-h-[44px] text-xs font-semibold"
+              onClick={() => setMobileFiltersOpen(false)}
+            >
+              Apply Filters
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

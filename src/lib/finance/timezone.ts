@@ -1,15 +1,24 @@
 export const DEFAULT_TZ = 'Asia/Kolkata';
 
+/** Normalizes legacy or non-canonical timezone strings (e.g. Asia/Calcutta -> Asia/Kolkata) */
+export function normalizeTimezone(tz: string = DEFAULT_TZ): string {
+  if (!tz) return DEFAULT_TZ;
+  if (tz === 'Asia/Calcutta') return 'Asia/Kolkata';
+  return tz;
+}
+
 /** Returns YYYY-MM-DD for "today" in the given IANA timezone */
 export function todayInTz(tz: string = DEFAULT_TZ): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+  const normalized = normalizeTimezone(tz);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: normalized }).format(new Date());
 }
 
 /** Returns YYYY-MM-DD for "yesterday" in the given IANA timezone */
 export function yesterdayInTz(tz: string = DEFAULT_TZ): string {
+  const normalized = normalizeTimezone(tz);
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: normalized }).format(d);
 }
 
 /** Returns YYYY-MM-DD for the first day of the current month in the given timezone */

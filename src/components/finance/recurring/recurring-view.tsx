@@ -30,6 +30,7 @@ import type { RecurringRuleDTO } from '@src/lib/finance/contract';
 import {
   generateDueNowAction,
   getRecurringPageDataAction,
+  skipNextRecurringRuleAction,
   toggleRecurringRuleAction,
   type RecurringPageData,
 } from '@src/app/(app)/finance/recurring/actions';
@@ -100,6 +101,16 @@ export function RecurringView({ initialData }: RecurringViewProps) {
       await refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to toggle rule state');
+    }
+  };
+
+  const handleSkipNext = async (rule: RecurringRuleDTO) => {
+    try {
+      const res = await skipNextRecurringRuleAction(rule.id);
+      toast.success(`Skipped occurrence. Next due: ${res.rule.nextOccurrence}`);
+      await refreshData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to skip next occurrence');
     }
   };
 
@@ -199,7 +210,7 @@ export function RecurringView({ initialData }: RecurringViewProps) {
       </div>
 
       {/* KPI Cards Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Active Rules */}
         <div className="p-4 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
@@ -428,7 +439,99 @@ export function RecurringView({ initialData }: RecurringViewProps) {
               </Button>
             </div>
           ) : (
-            <div className="rounded-xl border bg-card overflow-hidden shadow-xs">
+            <>
+              {/* Mobile Card List */}
+              <div className="md:hidden space-y-2.5">
+                {data.rules.map((rule) => {
+                  const isExpired = rule.endDate && rule.nextOccurrence > rule.endDate;
+                  const title =
+                    rule.payee ||
+                    (rule.note ? rule.note.replace(/\[DOM:\d+\]/, '').trim() : '') ||
+                    'Recurring Rule';
+                  const accountName = accountMap.get(rule.accountId) || 'Account';
+                  const toAccountName = rule.toAccountId ? accountMap.get(rule.toAccountId) : null;
+                  const categoryName = rule.categoryId ? categoryMap.get(rule.categoryId) : null;
+
+                  return (
+                    <div
+                      key={rule.id}
+                      className="p-3 rounded-xl border bg-card shadow-xs flex flex-col gap-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-foreground truncate">{title}</h4>
+                          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                            {accountName}{toAccountName ? ` → ${toAccountName}` : ''} • {categoryName || 'General'}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="font-mono font-bold text-xs text-foreground">
+                            {formatINR(rule.amount)}
+                          </span>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              className="size-7 inline-flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                              aria-label="Actions"
+                            >
+                              <MoreVerticalIcon className="size-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel>Rule Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => openEdit(rule)} className="cursor-pointer">
+                                  Edit Rule
+                                </DropdownMenuItem>
+                                {rule.isActive && (
+                                  <DropdownMenuItem onClick={() => handleSkipNext(rule)} className="cursor-pointer">
+                                    Skip Next ({rule.nextOccurrence})
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => handleToggleActive(rule)} className="cursor-pointer">
+                                  {rule.isActive ? 'Pause Rule' : 'Resume Rule'}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => openDelete(rule)}
+                                  className="text-destructive focus:text-destructive cursor-pointer"
+                                >
+                                  Delete Rule
+                                </DropdownMenuItem>
+                              </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t pt-2 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <span className="capitalize">{rule.frequency}</span>
+                          <span>•</span>
+                          <span>Due {rule.nextOccurrence}</span>
+                        </div>
+
+                        {isExpired ? (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            Completed
+                          </Badge>
+                        ) : rule.isActive ? (
+                          <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10">
+                            Paused
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block rounded-xl border bg-card overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/50 border-b text-muted-foreground font-medium">
@@ -465,10 +568,21 @@ export function RecurringView({ initialData }: RecurringViewProps) {
                             {cleanNote && cleanNote !== title && (
                               <div className="text-[11px] text-muted-foreground line-clamp-1">{cleanNote}</div>
                             )}
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              {rule.occurrencesCount ?? 0} generated
+                            </div>
                           </td>
 
-                          <td className="py-3 px-3 capitalize font-medium text-muted-foreground">
-                            {rule.type}
+                          <td className="py-3 px-3 space-y-1">
+                            <span className="capitalize font-medium text-muted-foreground block">
+                              {rule.type}
+                            </span>
+                            <Badge
+                              variant={rule.mode === 'ask_confirm' ? 'secondary' : 'outline'}
+                              className="text-[10px] px-1 py-0"
+                            >
+                              {rule.mode === 'ask_confirm' ? 'Confirm in Inbox' : 'Auto-Post'}
+                            </Badge>
                           </td>
 
                           <td className="py-3 px-3">
@@ -523,12 +637,17 @@ export function RecurringView({ initialData }: RecurringViewProps) {
                               >
                                 <MoreVerticalIcon className="size-4" />
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-36">
+                              <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuGroup>
                                   <DropdownMenuLabel>Rule Actions</DropdownMenuLabel>
                                   <DropdownMenuItem onClick={() => openEdit(rule)} className="cursor-pointer">
                                     Edit Rule
                                   </DropdownMenuItem>
+                                  {rule.isActive && (
+                                    <DropdownMenuItem onClick={() => handleSkipNext(rule)} className="cursor-pointer">
+                                      Skip Next ({rule.nextOccurrence})
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuItem onClick={() => handleToggleActive(rule)} className="cursor-pointer">
                                     {rule.isActive ? 'Pause Rule' : 'Resume Rule'}
                                   </DropdownMenuItem>
@@ -550,7 +669,8 @@ export function RecurringView({ initialData }: RecurringViewProps) {
                 </table>
               </div>
             </div>
-          )}
+          </>
+        )}
         </TabsContent>
       </Tabs>
 

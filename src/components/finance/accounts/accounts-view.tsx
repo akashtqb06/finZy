@@ -93,7 +93,7 @@ export function AccountsView() {
       </div>
 
       {/* Summary Strip (Assets, Liabilities, Net Worth) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Total Assets */}
         <div className="p-4 rounded-xl border bg-card flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
@@ -103,10 +103,10 @@ export function AccountsView() {
             </div>
           </div>
           <div className="mt-2">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <div className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate">
               {formatINR(totalAssets)}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="text-[11px] text-muted-foreground mt-0.5 hidden sm:block">
               Across cash, banks, FDs, and investments
             </div>
           </div>
@@ -121,17 +121,17 @@ export function AccountsView() {
             </div>
           </div>
           <div className="mt-2">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-destructive">
+            <div className="text-lg sm:text-2xl font-bold tracking-tight text-destructive truncate">
               {formatINR(totalLiabilities)}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="text-[11px] text-muted-foreground mt-0.5 hidden sm:block">
               Outstanding credit card balances and active loans
             </div>
           </div>
         </div>
 
         {/* Net Worth */}
-        <div className="p-4 rounded-xl border bg-primary/5 border-primary/20 flex flex-col justify-between shadow-xs">
+        <div className="col-span-2 sm:col-span-1 p-4 rounded-xl border bg-primary/5 border-primary/20 flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-primary">Total Net Worth</span>
             <div className="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
@@ -139,7 +139,7 @@ export function AccountsView() {
             </div>
           </div>
           <div className="mt-2">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <div className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
               {formatINR(netWorth)}
             </div>
             <div className="text-[11px] text-primary font-medium mt-0.5">
@@ -380,7 +380,7 @@ export function AccountsView() {
             </div>
             <span className="text-xs font-semibold text-foreground">
               {formatINR(
-                grouped.deposits.reduce((sum, a) => sum + (a.accruedValue || a.balance), 0)
+                grouped.deposits.reduce((sum, a) => sum + (a.accruedValue ?? a.currentValue ?? a.balance), 0)
               )}
             </span>
           </div>
@@ -407,7 +407,7 @@ export function AccountsView() {
                 <div className="mt-4 flex items-baseline justify-between">
                   <div>
                     <div className="text-lg font-bold text-foreground">
-                      {formatINR(acc.accruedValue || acc.balance)}
+                      {formatINR(acc.accruedValue ?? acc.currentValue ?? acc.balance)}
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-0.5">
                       Accrued Value
@@ -416,10 +416,19 @@ export function AccountsView() {
 
                   {acc.daysToMaturity !== undefined && (
                     <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium">
-                      Matures in {acc.daysToMaturity}d
+                      {acc.daysToMaturity <= 0 ? 'Matured' : `Matures in ${acc.daysToMaturity}d`}
                     </Badge>
                   )}
                 </div>
+
+                {acc.kind === 'fixed_deposit' && acc.maturityDate && (
+                  <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Maturity date:</span>
+                    <span className="font-semibold text-foreground font-mono">
+                      {acc.maturityDate}
+                    </span>
+                  </div>
+                )}
 
                 {acc.kind === 'recurring_deposit' && acc.nextInstallmentDate && (
                   <div className="mt-3 pt-2 border-t flex items-center justify-between text-[11px] text-muted-foreground">

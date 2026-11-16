@@ -16,9 +16,15 @@ import {
 } from '../constants';
 import { getDeterministicCategoryColor } from '../colors';
 import {
-  calculateFDAccruedValue,
   calculateRDAccruedValue,
 } from '../domain/deposits';
+import {
+  calculateFDValue,
+  type FDConfig,
+  type FDType,
+  type FDCompounding,
+  type FDAccrualMode,
+} from '../domain/fd';
 import { recomputeDepositValuations } from '../db-service/valuations';
 import {
   completeSetupPayloadSchema,
@@ -289,14 +295,22 @@ export async function completeSetup(
         if (acc.currentValuePaise !== undefined) {
           valuationPaise = acc.currentValuePaise;
         } else if (principal > 0 && acc.startDate) {
-          valuationPaise = calculateFDAccruedValue({
-            principal,
-            annualInterestRate: (acc.interestRate || 0) / 100,
-            compoundingFrequency: acc.compoundingFrequency ?? 'quarterly',
-            startDate: acc.startDate,
-            maturityDate: acc.maturityDate,
-            asOfDate: trackingDate,
-          });
+          const rawRate = Number(acc.interestRate || 7.1);
+          const ratePercent = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
+          const maturityDate = acc.maturityDate || acc.startDate;
+          valuationPaise = calculateFDValue(
+            {
+              principal,
+              ratePercent,
+              startDate: acc.startDate,
+              maturityDate,
+              compounding: (acc.compoundingFrequency || 'quarterly') as FDCompounding,
+              fdType: (acc.fdType || 'cumulative') as FDType,
+              accrualMode: (acc.accrualMode || 'bank') as FDAccrualMode,
+              maturityAmountPerReceipt: acc.maturityAmountPerReceipt,
+            },
+            trackingDate
+          ).currentValue;
         } else {
           valuationPaise = principal;
         }
@@ -341,11 +355,23 @@ export async function completeSetup(
         metadata.dueDays = acc.dueDay ?? 20;
         metadata.isOffsetDays = true;
       } else if (acc.kind === 'fixed_deposit') {
+        metadata.fdType = acc.fdType || 'cumulative';
         metadata.principalPaise = acc.principalPaise;
+        metadata.principal = acc.principalPaise;
+        metadata.ratePercent = acc.interestRate;
         metadata.interestRate = acc.interestRate;
-        metadata.compoundingFrequency = acc.compoundingFrequency;
+        metadata.compounding = acc.compoundingFrequency || 'quarterly';
+        metadata.compoundingFrequency = acc.compoundingFrequency || 'quarterly';
+        metadata.accrualMode = acc.accrualMode || 'bank';
+        metadata.dayCount = acc.dayCount || 'act_365';
         metadata.startDate = acc.startDate;
         metadata.maturityDate = acc.maturityDate;
+        metadata.tenureYears = acc.tenureYears;
+        metadata.tenureMonths = acc.tenureMonths;
+        metadata.tenureDays = acc.tenureDays;
+        metadata.maturityAmountPerReceipt = acc.maturityAmountPerReceipt;
+        metadata.payoutFrequency = acc.payoutFrequency;
+        metadata.payoutAccountId = acc.payoutAccountId;
       } else if (acc.kind === 'recurring_deposit') {
         const startDay = acc.startDate ? parseInt(acc.startDate.slice(8, 10), 10) : 2;
         const instDay = acc.installmentDay !== undefined ? acc.installmentDay : startDay;

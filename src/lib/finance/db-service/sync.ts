@@ -2,7 +2,7 @@ import { sql, eq } from 'drizzle-orm';
 import { db, finUserSettings } from '@src/lib/db';
 import type { AppDb } from '@src/lib/db/client';
 
-type TransactionContext = Parameters<Parameters<AppDb['transaction']>[0]>[0];
+type TransactionContext = Parameters<Parameters<AppDb['transaction']>[0]>[0] | AppDb;
 
 /**
  * Increments fin_user_settings.data_version inside the caller's transaction.

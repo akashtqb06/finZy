@@ -64,7 +64,7 @@ describe('Recurring Generator: Unit, Back-Fill & Idempotency', () => {
 
     // Check clientRequestId format: ruleId + date
     for (const t of ruleTxns) {
-      expect(t.clientRequestId).toBe(`${rule.id}_${t.date}`);
+      expect(t.clientRequestId).toBe(`${rule.id}:${t.date}`);
       expect(t.isRecurring).toBe(true);
     }
   });

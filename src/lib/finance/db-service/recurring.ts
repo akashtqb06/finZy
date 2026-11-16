@@ -1,8 +1,7 @@
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, finAccounts, finCategories, finRecurringRules, finTransactions } from '@src/lib/db';
 import { BadRequestError, NotFoundError, ConflictError } from '@src/app/api/utils';
 import { incrementDataVersion } from './sync';
-import type { RecurringFrequency } from '../constants';
 import {
   type CreateRecurringRuleDTO,
   type RecurringRuleDTO,
@@ -10,6 +9,13 @@ import {
   createRecurringRuleSchema,
   updateRecurringRuleSchema,
 } from '../contract';
+import {
+  advanceRecurringDate,
+  extractAnchorDay,
+  extractAnchorMonth,
+} from '../recurring/date-math';
+
+export { advanceRecurringDate };
 
 export function mapRecurringRuleToDTO(row: typeof finRecurringRules.$inferSelect): RecurringRuleDTO {
   return {
@@ -19,53 +25,29 @@ export function mapRecurringRuleToDTO(row: typeof finRecurringRules.$inferSelect
     toAccountId: row.toAccountId,
     categoryId: row.categoryId,
     type: row.type as RecurringRuleDTO['type'],
+    subType: row.subType ?? undefined,
     amount: Number(row.amount),
+    amountType: (row.amountType ?? 'fixed') as RecurringRuleDTO['amountType'],
     payee: row.payee,
     note: row.note,
     frequency: row.frequency as RecurringRuleDTO['frequency'],
     interval: row.interval,
+    weekdays: row.weekdays ?? undefined,
+    dayOfMonth: row.dayOfMonth ?? undefined,
+    monthOfYear: row.monthOfYear ?? undefined,
     startDate: row.startDate,
     endDate: row.endDate,
+    maxOccurrences: row.maxOccurrences ?? undefined,
+    occurrencesCount: row.occurrencesCount ?? 0,
+    mode: (row.mode ?? 'auto_post') as RecurringRuleDTO['mode'],
+    skippedDates: row.skippedDates ?? [],
+    history: (row.history ?? []) as RecurringRuleDTO['history'],
     nextOccurrence: row.nextOccurrence,
     isActive: row.isActive,
     version: row.version ?? 1,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
-}
-
-export function advanceRecurringDate(
-  currentDate: string,
-  frequency: RecurringFrequency,
-  interval: number
-): string {
-  const [y, m, d] = currentDate.split('-').map((v) => parseInt(v, 10));
-  const date = new Date(Date.UTC(y, m - 1, d));
-
-  switch (frequency) {
-    case 'daily':
-      date.setUTCDate(date.getUTCDate() + interval);
-      break;
-    case 'weekly':
-      date.setUTCDate(date.getUTCDate() + interval * 7);
-      break;
-    case 'monthly': {
-      const targetMonth = m - 1 + interval;
-      date.setUTCMonth(targetMonth);
-      break;
-    }
-    case 'quarterly': {
-      const targetMonth = m - 1 + interval * 3;
-      date.setUTCMonth(targetMonth);
-      break;
-    }
-    case 'yearly': {
-      date.setUTCFullYear(date.getUTCFullYear() + interval);
-      break;
-    }
-  }
-
-  return date.toISOString().slice(0, 10);
 }
 
 export async function listRecurringRules(userId: string): Promise<RecurringRuleDTO[]> {
@@ -150,13 +132,23 @@ export async function createRecurringRule(
         toAccountId: validated.toAccountId || null,
         categoryId: validated.categoryId || null,
         type: validated.type,
+        subType: validated.subType || null,
         amount: validated.amount,
+        amountType: validated.amountType || 'fixed',
         payee: validated.payee || null,
         note: validated.note || null,
         frequency: validated.frequency,
         interval: validated.interval,
+        weekdays: validated.weekdays || null,
+        dayOfMonth: validated.dayOfMonth || null,
+        monthOfYear: validated.monthOfYear || null,
         startDate: validated.startDate,
         endDate: validated.endDate || null,
+        maxOccurrences: validated.maxOccurrences || null,
+        occurrencesCount: 0,
+        mode: validated.mode || 'auto_post',
+        skippedDates: [],
+        history: [],
         nextOccurrence,
         isActive: true,
         version: 1,
@@ -191,13 +183,24 @@ export async function updateRecurringRule(
   if (validated.accountId !== undefined) updateValues.accountId = validated.accountId;
   if (validated.toAccountId !== undefined) updateValues.toAccountId = validated.toAccountId;
   if (validated.categoryId !== undefined) updateValues.categoryId = validated.categoryId;
+  if (validated.type !== undefined) updateValues.type = validated.type;
+  if (validated.subType !== undefined) updateValues.subType = validated.subType;
   if (validated.amount !== undefined) updateValues.amount = validated.amount;
+  if (validated.amountType !== undefined) updateValues.amountType = validated.amountType;
   if (validated.payee !== undefined) updateValues.payee = validated.payee;
   if (validated.note !== undefined) updateValues.note = validated.note;
   if (validated.frequency !== undefined) updateValues.frequency = validated.frequency;
   if (validated.interval !== undefined) updateValues.interval = validated.interval;
+  if (validated.weekdays !== undefined) updateValues.weekdays = validated.weekdays;
+  if (validated.dayOfMonth !== undefined) updateValues.dayOfMonth = validated.dayOfMonth;
+  if (validated.monthOfYear !== undefined) updateValues.monthOfYear = validated.monthOfYear;
   if (validated.startDate !== undefined) updateValues.startDate = validated.startDate;
   if (validated.endDate !== undefined) updateValues.endDate = validated.endDate;
+  if (validated.maxOccurrences !== undefined) updateValues.maxOccurrences = validated.maxOccurrences;
+  if (validated.occurrencesCount !== undefined) updateValues.occurrencesCount = validated.occurrencesCount;
+  if (validated.mode !== undefined) updateValues.mode = validated.mode;
+  if (validated.skippedDates !== undefined) updateValues.skippedDates = validated.skippedDates;
+  if (validated.history !== undefined) updateValues.history = validated.history;
   if (validated.nextOccurrence !== undefined) updateValues.nextOccurrence = validated.nextOccurrence;
   if (validated.isActive !== undefined) updateValues.isActive = validated.isActive;
 
@@ -215,6 +218,38 @@ export async function updateRecurringRule(
   return mapRecurringRuleToDTO(updated);
 }
 
+export async function skipNextRecurringRule(
+  userId: string,
+  ruleId: string
+): Promise<RecurringRuleDTO> {
+  const rule = await getRecurringRule(userId, ruleId);
+  const skippedDate = rule.nextOccurrence;
+  const skippedDates = [...(rule.skippedDates || []), skippedDate];
+
+  const anchorDay = extractAnchorDay(rule);
+  const anchorMonth = extractAnchorMonth(rule);
+
+  const nextDate = advanceRecurringDate(
+    rule.nextOccurrence,
+    rule.frequency,
+    rule.interval,
+    anchorDay,
+    anchorMonth,
+    rule.weekdays
+  );
+
+  const isExpired = Boolean(
+    (rule.endDate && nextDate > rule.endDate) ||
+      (rule.maxOccurrences && (rule.occurrencesCount ?? 0) >= rule.maxOccurrences)
+  );
+
+  return updateRecurringRule(userId, ruleId, {
+    nextOccurrence: nextDate,
+    skippedDates,
+    isActive: !isExpired,
+  });
+}
+
 export async function deleteRecurringRule(
   userId: string,
   ruleId: string,
@@ -229,7 +264,6 @@ export async function deleteRecurringRule(
 
   await db.transaction(async (tx) => {
     // Null out recurringRuleId on generated transactions so they are preserved
-    // but no longer reference the deleted rule (task spec: keep transactions with ruleId=null).
     await tx
       .update(finTransactions)
       .set({ recurringRuleId: null })
@@ -244,64 +278,10 @@ export async function deleteRecurringRule(
 }
 
 /**
- * Processes due recurring rules across users and materializes transactions.
+ * Backward-compatible helper for db-service/index.ts: delegates to generateDueRecurringTransactions.
  */
 export async function processRecurringRules(): Promise<{ processed: number; generated: number }> {
-  const today = new Date().toISOString().slice(0, 10);
-
-  const dueRules = await db
-    .select()
-    .from(finRecurringRules)
-    .where(
-      and(
-        eq(finRecurringRules.isActive, true),
-        lte(finRecurringRules.nextOccurrence, today)
-      )
-    );
-
-  let generated = 0;
-
-  for (const rule of dueRules) {
-    let signedAmount = -Math.abs(Number(rule.amount));
-    if (rule.type === 'income') {
-      signedAmount = Math.abs(Number(rule.amount));
-    }
-
-    // Materialize transaction
-    await db.insert(finTransactions).values({
-      userId: rule.userId,
-      accountId: rule.accountId,
-      toAccountId: rule.toAccountId,
-      categoryId: rule.categoryId,
-      date: rule.nextOccurrence,
-      type: rule.type,
-      amount: Number(rule.amount),
-      signedAmount,
-      payee: rule.payee,
-      note: rule.note,
-      isRecurring: true,
-      recurringRuleId: rule.id,
-    });
-    generated += 1;
-
-    // Advance occurrence
-    const nextDate = advanceRecurringDate(
-      rule.nextOccurrence,
-      rule.frequency as RecurringFrequency,
-      rule.interval
-    );
-
-    const isExpired = rule.endDate && nextDate > rule.endDate;
-
-    await db
-      .update(finRecurringRules)
-      .set({
-        nextOccurrence: nextDate,
-        isActive: !isExpired,
-        updatedAt: new Date(),
-      })
-      .where(eq(finRecurringRules.id, rule.id));
-  }
-
-  return { processed: dueRules.length, generated };
+  const { generateDueRecurringTransactions } = await import('../recurring/generator');
+  const res = await generateDueRecurringTransactions({ backend: 'db' });
+  return { processed: res.processed, generated: res.created };
 }

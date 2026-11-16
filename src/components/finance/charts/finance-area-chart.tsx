@@ -21,6 +21,9 @@ export interface FinanceAreaChartProps {
     height?: number | string;
     className?: string;
     allowNegative?: boolean;
+    tickCount?: number;
+    referenceX?: string;
+    referenceXLabel?: string;
 }
 
 export function FinanceAreaChart({
@@ -31,6 +34,9 @@ export function FinanceAreaChart({
     height = 220,
     className,
     allowNegative = false,
+    tickCount = 5,
+    referenceX,
+    referenceXLabel,
 }: FinanceAreaChartProps) {
     const chartId = React.useId().replace(/:/g, '');
 
@@ -76,7 +82,7 @@ export function FinanceAreaChart({
 
     return (
         <ChartContainer config={chartConfig} className={cn('aspect-auto w-full', className)} style={{ height }}>
-            <AreaChart data={chartPoints} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart data={chartPoints} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
                 <defs>
                     <linearGradient id={`gradient-${chartId}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={`var(--color-${dataKey})`} stopOpacity={0.4} />
@@ -96,16 +102,26 @@ export function FinanceAreaChart({
                 />
 
                 <YAxis
-                    width="auto"
+                    width={42}
                     tickLine={false}
                     axisLine={false}
-                    tickMargin={8}
+                    tickMargin={4}
+                    tickCount={tickCount}
                     domain={hasNegativeValues ? ['auto', 'auto'] : [0, 'auto']}
                     tickFormatter={(v) => formatInrCompact(Number(v))}
                 />
 
                 {hasNegativeValues && (
                     <ReferenceLine y={0} stroke="hsl(var(--muted-foreground) / 0.5)" strokeDasharray="3 3" />
+                )}
+
+                {referenceX && (
+                    <ReferenceLine
+                        x={referenceX}
+                        stroke="hsl(var(--primary))"
+                        strokeDasharray="3 3"
+                        label={referenceXLabel ? { value: referenceXLabel, position: 'top', fill: 'hsl(var(--primary))', fontSize: 10 } : undefined}
+                    />
                 )}
 
                 <ChartTooltip

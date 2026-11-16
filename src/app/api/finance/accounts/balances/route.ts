@@ -7,11 +7,14 @@ import { db, finAccounts, finPfEntries, finTransactions, finValuations } from '@
 import { mapAccountToDTO } from '@src/lib/finance/db-service/accounts';
 import type { AccountWithBalance } from '@src/components/finance/shared/fixtures';
 import {
-  calculateFDAccruedValue,
-  calculateFDMaturity,
-  addMonthsToDate,
-  normalizeInterestRate,
-} from '@src/lib/finance/domain/deposits';
+  calculateFDValue,
+  type FDConfig,
+  type FDType,
+  type FDCompounding,
+  type FDAccrualMode,
+  type FDDayCount,
+  type FDPayoutFrequency,
+} from '@src/lib/finance/domain/fd';
 import {
   rdValue,
   deriveMaturityDate,
@@ -250,50 +253,67 @@ export async function GET() {
       let lastStatementDate: string | undefined;
       let dueDays: number | undefined;
       let isOffsetDays: boolean | undefined;
+      let fdType: 'cumulative' | 'payout' | undefined;
+      let effectiveYieldPercent: number | undefined;
+      let dailyAccrual: number | undefined;
+      let nextCompoundingDate: string | null | undefined;
+      let nextPayoutDate: string | null | undefined;
+      let totalInterestPaidOut: number | undefined;
+      let differenceFromReceiptText: string | undefined;
+      let differenceFromReceiptPaise: number | undefined;
+      let accrualMode: 'bank' | 'smooth' | undefined;
+      let payoutFrequency: string | undefined;
+      let payoutAccountId: string | null | undefined;
 
       if (dto.kind === 'fixed_deposit') {
         principal = Number(
           meta.principalPaise ?? meta.principal ?? meta.depositAmount ?? meta.openingBalancePaise ?? balance
         );
-        const rawRate = Number(meta.interestRate ?? meta.rate ?? 0.07);
+        const rawRate = Number(meta.ratePercent ?? meta.interestRate ?? meta.rate ?? 7.1);
         interestRate = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
-        const normRate = normalizeInterestRate(rawRate);
-        compoundingFrequency = (meta.compoundingFrequency ?? meta.compounding ?? 'quarterly') as CompoundingFrequency;
+        fdType = (meta.fdType as FDType) || 'cumulative';
+        compoundingFrequency = (meta.compounding ?? meta.compoundingFrequency ?? 'quarterly') as FDCompounding;
+        accrualMode = (meta.accrualMode as FDAccrualMode) || 'bank';
+        payoutFrequency = meta.payoutFrequency as string | undefined;
+        payoutAccountId = (meta.payoutAccountId as string | null) || null;
+
         const startDate =
           (meta.startDate as string) ||
           (acc.createdAt instanceof Date ? acc.createdAt.toISOString().slice(0, 10) : String(acc.createdAt).slice(0, 10));
         const tenureMonths = Number(meta.tenureMonths || 12);
         maturityDate = (meta.maturityDate as string) || addMonthsToDate(startDate, tenureMonths);
 
-        const mat = calculateFDMaturity({
+        // Fetch manual anchor if exists
+        const anchor = manualAnchorMap.get(acc.id);
+
+        const fdConfig: FDConfig = {
           principal,
-          annualInterestRate: normRate,
-          compoundingFrequency: compoundingFrequency as CompoundingFrequency,
+          ratePercent: interestRate,
           startDate,
-          tenureMonths,
-        });
-        projectedMaturityAmount = mat.maturityAmount;
+          maturityDate,
+          fdType,
+          compounding: compoundingFrequency as FDCompounding,
+          accrualMode,
+          dayCount: 'act_365',
+          maturityAmountPerReceipt: meta.maturityAmountPerReceipt ? Number(meta.maturityAmountPerReceipt) : undefined,
+          manualAnchor: anchor,
+          payoutFrequency: payoutFrequency as FDPayoutFrequency | undefined,
+          payoutAccountId,
+        };
 
-        accruedValue = valuation
-          ? valuation.value
-          : calculateFDAccruedValue({
-              principal,
-              annualInterestRate: normRate,
-              compoundingFrequency: compoundingFrequency as CompoundingFrequency,
-              startDate,
-              tenureMonths,
-              maturityDate,
-              asOfDate: today,
-            });
-
-        interestEarned = Math.max(0, accruedValue - principal);
-        daysToMaturity = Math.max(
-          0,
-          Math.round(
-            (new Date(`${maturityDate}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) /
-              (86400 * 1000)
-          )
-        );
+        const fdVal = calculateFDValue(fdConfig, today);
+        accruedValue = fdVal.currentValue;
+        currentValue = fdVal.currentValue;
+        interestEarned = fdVal.interestAccrued;
+        projectedMaturityAmount = fdVal.projectedMaturityValue;
+        daysToMaturity = fdVal.daysToMaturity;
+        effectiveYieldPercent = fdVal.effectiveYieldPercent;
+        dailyAccrual = fdVal.dailyAccrual;
+        nextCompoundingDate = fdVal.nextCompoundingDate;
+        nextPayoutDate = fdVal.nextPayoutDate;
+        totalInterestPaidOut = fdVal.totalInterestPaidOut;
+        differenceFromReceiptText = fdVal.differenceFromReceiptText;
+        differenceFromReceiptPaise = fdVal.differenceFromReceiptPaise;
       } else if (dto.kind === 'recurring_deposit') {
         monthlyInstallment = Number(
           meta.monthlyInstallmentPaise ??
@@ -444,6 +464,17 @@ export async function GET() {
         currentDueDate,
         nextDueDate,
         pensionMemo,
+        fdType,
+        effectiveYieldPercent,
+        dailyAccrual,
+        nextCompoundingDate,
+        nextPayoutDate,
+        totalInterestPaidOut,
+        differenceFromReceiptText,
+        differenceFromReceiptPaise,
+        accrualMode,
+        payoutFrequency,
+        payoutAccountId,
       };
     });
 

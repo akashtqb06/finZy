@@ -5,8 +5,8 @@ import { jsonNoStore } from '../utils';
 import { createRecurringRuleSchema } from '@src/lib/finance/contract';
 import { getFinanceService } from '@src/lib/finance/service';
 import { checkFeatureGatedApi } from '@src/lib/finance/flags';
-import { catchUpRecurringRulesIfDue, generateDueRecurringTransactions } from '@src/lib/finance/recurring';
-import { todayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
+import { generateDueRecurringTransactions, getUserTimezone } from '@src/lib/finance/recurring';
+import { todayInTz } from '@src/lib/finance/timezone';
 
 export async function GET() {
   try {
@@ -14,7 +14,12 @@ export async function GET() {
     const gated = checkFeatureGatedApi('recurring');
     if (gated) return gated;
 
-    await catchUpRecurringRulesIfDue(user.id);
+    const tz = await getUserTimezone(user.id);
+    const today = todayInTz(tz);
+    await generateDueRecurringTransactions({
+      userId: user.id,
+      asOfDate: today,
+    });
 
     const service = getFinanceService();
     const rules = await service.listRecurringRules(user.id);
@@ -36,7 +41,8 @@ export async function POST(request: NextRequest) {
     const service = getFinanceService();
     const rule = await service.createRecurringRule(user.id, data);
 
-    const today = todayInTz(DEFAULT_TZ);
+    const tz = await getUserTimezone(user.id);
+    const today = todayInTz(tz);
     await generateDueRecurringTransactions({
       userId: user.id,
       asOfDate: today,

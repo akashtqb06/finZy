@@ -15,6 +15,13 @@
       "when": 1794805841062,
       "tag": "0001_supabase_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794805841063,
+      "tag": "0002_exotic_the_stranger",
+      "breakpoints": true
     }
   ]
 }

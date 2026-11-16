@@ -24,8 +24,9 @@ export function PreferencesStep({
   // Auto-detect browser timezone on first mount if default
   useEffect(() => {
     try {
-      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      if (browserTz && preferences.timezone === 'Asia/Kolkata') {
+      let browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (browserTz === 'Asia/Calcutta') browserTz = 'Asia/Kolkata';
+      if (browserTz && browserTz !== 'Asia/Kolkata' && preferences.timezone === 'Asia/Kolkata') {
         onChange({ ...preferences, timezone: browserTz });
       }
     } catch {

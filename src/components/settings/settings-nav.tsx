@@ -37,12 +37,12 @@ export function SettingsNav() {
             {/* Small screen: horizontal Tabs row */}
             <div className="block md:hidden pb-4">
                 <Tabs value={currentActive} onValueChange={(val) => router.push(val)}>
-                    <TabsList className="w-full flex justify-start overflow-x-auto no-scrollbar py-1">
+                    <TabsList className="w-full flex justify-start overflow-x-auto no-scrollbar py-1 h-auto gap-1">
                         {navItems.map((item) => (
                             <TabsTrigger
                                 key={item.href}
                                 value={item.href}
-                                className="gap-2 shrink-0 text-xs sm:text-sm"
+                                className="gap-2 shrink-0 text-xs sm:text-sm min-h-[44px] px-3.5 rounded-lg"
                             >
                                 <item.icon className="size-4" />
                                 <span>{item.label}</span>

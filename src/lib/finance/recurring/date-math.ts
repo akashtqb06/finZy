@@ -37,13 +37,23 @@ export function formatDateUTC(year: number, month: number, day: number): string 
 
 /**
  * Extracts the anchor day of month for a recurring rule.
- * Checks for a `[DOM:XX]` tag in the note if available, otherwise falls back
- * to the day component of the rule's `startDate`.
+ * Returns either an integer 1-31 or 'last'.
  */
-export function extractAnchorDay(rule: { startDate: string; note?: string | null }): number {
+export function extractAnchorDay(rule: {
+  startDate: string;
+  dayOfMonth?: string | null;
+  note?: string | null;
+}): number | 'last' {
+  if (rule.dayOfMonth) {
+    if (rule.dayOfMonth.toLowerCase() === 'last') return 'last';
+    const parsed = parseInt(rule.dayOfMonth, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 31) return parsed;
+  }
+
   if (rule.note) {
-    const match = rule.note.match(/\[DOM:(\d{1,2})\]/);
+    const match = rule.note.match(/\[DOM:(\d{1,2}|last)\]/i);
     if (match) {
+      if (match[1].toLowerCase() === 'last') return 'last';
       const parsed = parseInt(match[1], 10);
       if (parsed >= 1 && parsed <= 31) {
         return parsed;
@@ -58,58 +68,15 @@ export function extractAnchorDay(rule: { startDate: string; note?: string | null
 /**
  * Extracts the anchor month for yearly recurrences (1-12).
  */
-export function extractAnchorMonth(rule: { startDate: string }): number {
+export function extractAnchorMonth(rule: {
+  startDate: string;
+  monthOfYear?: number | null;
+}): number {
+  if (rule.monthOfYear && rule.monthOfYear >= 1 && rule.monthOfYear <= 12) {
+    return rule.monthOfYear;
+  }
   const [, mStr] = rule.startDate.split('-');
   return parseInt(mStr, 10);
-}
-
-/**
- * Advances a recurring occurrence date according to frequency, interval, and day-of-month clamping.
- * Preserves anchor day of month across months of varying lengths (e.g., 31st -> Feb 28 -> Mar 31).
- */
-export function advanceRecurringDate(
-  currentDate: string,
-  frequency: RecurringFrequency,
-  interval: number = 1,
-  anchorDay?: number,
-  anchorMonth?: number
-): string {
-  const [y, m, d] = currentDate.split('-').map((v) => parseInt(v, 10));
-  const safeInterval = Math.max(1, interval);
-  const targetDay = anchorDay ?? d;
-
-  switch (frequency) {
-    case 'daily': {
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      dt.setUTCDate(dt.getUTCDate() + safeInterval);
-      return dt.toISOString().slice(0, 10);
-    }
-    case 'weekly': {
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      dt.setUTCDate(dt.getUTCDate() + safeInterval * 7);
-      return dt.toISOString().slice(0, 10);
-    }
-    case 'monthly': {
-      const totalMonths = y * 12 + (m - 1) + safeInterval;
-      const targetYear = Math.floor(totalMonths / 12);
-      const targetM = (totalMonths % 12) + 1;
-      const clampedDay = clampDayToMonth(targetYear, targetM, targetDay);
-      return formatDateUTC(targetYear, targetM, clampedDay);
-    }
-    case 'quarterly': {
-      const totalMonths = y * 12 + (m - 1) + safeInterval * 3;
-      const targetYear = Math.floor(totalMonths / 12);
-      const targetM = (totalMonths % 12) + 1;
-      const clampedDay = clampDayToMonth(targetYear, targetM, targetDay);
-      return formatDateUTC(targetYear, targetM, clampedDay);
-    }
-    case 'yearly': {
-      const targetYear = y + safeInterval;
-      const targetM = anchorMonth ?? m;
-      const clampedDay = clampDayToMonth(targetYear, targetM, targetDay);
-      return formatDateUTC(targetYear, targetM, clampedDay);
-    }
-  }
 }
 
 /**
@@ -125,6 +92,218 @@ export function daysBetween(fromDate: string, targetDate: string): number {
 }
 
 /**
+ * Adds N days to a YYYY-MM-DD date in UTC.
+ */
+export function addDaysUTC(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Advances a recurring occurrence date according to frequency, interval, weekdays, and clamping.
+ * Preserves anchor day of month across months of varying lengths (e.g., 31st -> Feb 28 -> Mar 31).
+ */
+export function advanceRecurringDate(
+  currentDate: string,
+  frequency: RecurringFrequency,
+  interval: number = 1,
+  anchorDay?: number | 'last',
+  anchorMonth?: number,
+  weekdays?: number[] | null
+): string {
+  const [y, m, d] = currentDate.split('-').map((v) => parseInt(v, 10));
+  const safeInterval = Math.max(1, interval);
+
+  switch (frequency) {
+    case 'daily': {
+      return addDaysUTC(currentDate, safeInterval);
+    }
+
+    case 'weekly': {
+      if (weekdays && weekdays.length > 0) {
+        const sortedDays = Array.from(new Set(weekdays)).sort((a, b) => a - b);
+        const currentDt = new Date(Date.UTC(y, m - 1, d));
+        const currentDayOfWeek = currentDt.getUTCDay(); // 0=Sun..6=Sat
+
+        // Look for next weekday in current week
+        const nextInSameWeek = sortedDays.find((day) => day > currentDayOfWeek);
+        if (nextInSameWeek !== undefined) {
+          return addDaysUTC(currentDate, nextInSameWeek - currentDayOfWeek);
+        }
+
+        // Advance to next active cycle week
+        const firstDayOfNextCycle = sortedDays[0];
+        const daysToNextWeekStart = 7 - currentDayOfWeek;
+        const totalDaysToNextCycle = daysToNextWeekStart + (safeInterval - 1) * 7 + firstDayOfNextCycle;
+        return addDaysUTC(currentDate, totalDaysToNextCycle);
+      }
+      return addDaysUTC(currentDate, safeInterval * 7);
+    }
+
+    case 'monthly': {
+      const totalMonths = y * 12 + (m - 1) + safeInterval;
+      const targetYear = Math.floor(totalMonths / 12);
+      const targetM = (totalMonths % 12) + 1;
+      let targetDay: number;
+      if (anchorDay === 'last') {
+        targetDay = getDaysInMonth(targetYear, targetM);
+      } else {
+        targetDay = clampDayToMonth(targetYear, targetM, anchorDay ?? d);
+      }
+      return formatDateUTC(targetYear, targetM, targetDay);
+    }
+
+    case 'quarterly': {
+      const totalMonths = y * 12 + (m - 1) + safeInterval * 3;
+      const targetYear = Math.floor(totalMonths / 12);
+      const targetM = (totalMonths % 12) + 1;
+      let targetDay: number;
+      if (anchorDay === 'last') {
+        targetDay = getDaysInMonth(targetYear, targetM);
+      } else {
+        targetDay = clampDayToMonth(targetYear, targetM, anchorDay ?? d);
+      }
+      return formatDateUTC(targetYear, targetM, targetDay);
+    }
+
+    case 'yearly': {
+      const targetYear = y + safeInterval;
+      const targetM = anchorMonth ?? m;
+      let targetDay: number;
+      if (anchorDay === 'last') {
+        targetDay = getDaysInMonth(targetYear, targetM);
+      } else {
+        targetDay = clampDayToMonth(targetYear, targetM, anchorDay ?? d);
+      }
+      return formatDateUTC(targetYear, targetM, targetDay);
+    }
+  }
+}
+
+/**
+ * Returns effective rule parameters at a given occurrence date taking `history` overrides into account.
+ */
+export function getEffectiveRuleParams(
+  rule: RecurringRuleDTO,
+  occurrenceDate: string
+): {
+  amount: number;
+  amountType: 'fixed' | 'variable';
+  frequency: RecurringFrequency;
+  interval: number;
+  dayOfMonth?: string | null;
+  weekdays?: number[] | null;
+  monthOfYear?: number | null;
+} {
+  let effectiveAmount = rule.amount;
+  let effectiveAmountType = rule.amountType ?? 'fixed';
+  let effectiveFreq = rule.frequency;
+  let effectiveInterval = rule.interval;
+  let effectiveDom = rule.dayOfMonth;
+  let effectiveWeekdays = rule.weekdays;
+  let effectiveMonth = rule.monthOfYear;
+
+  if (rule.history && rule.history.length > 0) {
+    const sorted = [...rule.history].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+    for (const h of sorted) {
+      if (h.effectiveFrom <= occurrenceDate) {
+        if (h.amount !== undefined) effectiveAmount = h.amount;
+        if (h.amountType !== undefined) effectiveAmountType = h.amountType;
+        if (h.frequency !== undefined) effectiveFreq = h.frequency as RecurringFrequency;
+        if (h.interval !== undefined) effectiveInterval = h.interval;
+        if (h.dayOfMonth !== undefined) effectiveDom = h.dayOfMonth;
+        if (h.weekdays !== undefined) effectiveWeekdays = h.weekdays;
+        if (h.monthOfYear !== undefined) effectiveMonth = h.monthOfYear;
+      }
+    }
+  }
+
+  return {
+    amount: effectiveAmount,
+    amountType: effectiveAmountType,
+    frequency: effectiveFreq,
+    interval: effectiveInterval,
+    dayOfMonth: effectiveDom,
+    weekdays: effectiveWeekdays,
+    monthOfYear: effectiveMonth,
+  };
+}
+
+/**
+ * Computes the next N occurrence dates starting from `fromOrNextDate` (exclusive or inclusive).
+ */
+export function computeNextNDates(
+  rule: {
+    startDate: string;
+    nextOccurrence?: string;
+    frequency: RecurringFrequency;
+    interval: number;
+    dayOfMonth?: string | null;
+    monthOfYear?: number | null;
+    weekdays?: number[] | null;
+    endDate?: string | null;
+    maxOccurrences?: number | null;
+    occurrencesCount?: number | null;
+    skippedDates?: string[] | null;
+  },
+  count: number = 5,
+  fromDate?: string
+): string[] {
+  const anchorDay = extractAnchorDay(rule);
+  const anchorMonth = extractAnchorMonth(rule);
+  const results: string[] = [];
+  const limitDate = rule.endDate;
+
+  let current = fromDate || rule.nextOccurrence || rule.startDate;
+
+  // If weekly with specific weekdays and starting on startDate, ensure current is on a valid weekday
+  if (rule.frequency === 'weekly' && rule.weekdays && rule.weekdays.length > 0) {
+    const [y, m, d] = current.split('-').map(Number);
+    const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    if (!rule.weekdays.includes(dayOfWeek)) {
+      // Advance to first eligible weekday
+      const sorted = [...rule.weekdays].sort((a, b) => a - b);
+      const nextDay = sorted.find((w) => w >= dayOfWeek);
+      if (nextDay !== undefined) {
+        current = addDaysUTC(current, nextDay - dayOfWeek);
+      } else {
+        current = addDaysUTC(current, 7 - dayOfWeek + sorted[0]);
+      }
+    }
+  }
+
+  let iterations = 0;
+  const maxIterations = 500;
+
+  while (results.length < count && iterations < maxIterations) {
+    iterations++;
+
+    if (limitDate && current > limitDate) break;
+
+    // Check if skipped
+    if (!rule.skippedDates || !rule.skippedDates.includes(current)) {
+      results.push(current);
+    }
+
+    const nextOcc = advanceRecurringDate(
+      current,
+      rule.frequency,
+      rule.interval,
+      anchorDay,
+      anchorMonth,
+      rule.weekdays
+    );
+
+    if (nextOcc <= current) break;
+    current = nextOcc;
+  }
+
+  return results;
+}
+
+/**
  * Projects all upcoming occurrences for active recurring rules over the specified horizon (default 60 days).
  */
 export function projectUpcomingOccurrences(
@@ -132,10 +311,7 @@ export function projectUpcomingOccurrences(
   fromDate: string = new Date().toISOString().slice(0, 10),
   daysAhead: number = 60
 ): OccurrenceProjection[] {
-  const [fy, fm, fd] = fromDate.split('-').map(Number);
-  const limitDateUtc = Date.UTC(fy, fm - 1, fd) + daysAhead * 24 * 60 * 60 * 1000;
-  const limitDate = new Date(limitDateUtc).toISOString().slice(0, 10);
-
+  const limitDate = addDaysUTC(fromDate, daysAhead);
   const projections: OccurrenceProjection[] = [];
 
   for (const rule of rules) {
@@ -143,23 +319,24 @@ export function projectUpcomingOccurrences(
 
     const anchorDay = extractAnchorDay(rule);
     const anchorMonth = extractAnchorMonth(rule);
-
     let occurrence = rule.nextOccurrence;
 
-    // Safety counter to guard against infinite loops
     let iterations = 0;
     const maxIterations = 200;
 
     while (occurrence <= limitDate && iterations < maxIterations) {
       iterations++;
 
-      if (rule.endDate && occurrence > rule.endDate) {
-        break;
-      }
+      if (rule.endDate && occurrence > rule.endDate) break;
 
       if (occurrence >= fromDate) {
         const daysUntil = daysBetween(fromDate, occurrence);
-        const name = rule.payee || (rule.note ? rule.note.replace(/\[DOM:\d+\]/, '').trim() : '') || 'Recurring Rule';
+        const name =
+          rule.payee ||
+          (rule.note ? rule.note.replace(/\[DOM:(\d+|last)\]/i, '').trim() : '') ||
+          'Recurring Rule';
+
+        const effective = getEffectiveRuleParams(rule, occurrence);
 
         projections.push({
           id: `${rule.id}_${occurrence}`,
@@ -167,10 +344,10 @@ export function projectUpcomingOccurrences(
           ruleName: name || 'Recurring Rule',
           date: occurrence,
           daysUntil,
-          type: rule.type,
-          amount: rule.amount,
+          type: rule.type as 'expense' | 'income' | 'transfer',
+          amount: effective.amount,
           payee: rule.payee,
-          note: rule.note ? rule.note.replace(/\[DOM:\d+\]/, '').trim() || null : null,
+          note: rule.note ? rule.note.replace(/\[DOM:(\d+|last)\]/i, '').trim() || null : null,
           accountId: rule.accountId,
           toAccountId: rule.toAccountId,
           categoryId: rule.categoryId,
@@ -185,17 +362,14 @@ export function projectUpcomingOccurrences(
         rule.frequency,
         rule.interval,
         anchorDay,
-        anchorMonth
+        anchorMonth,
+        rule.weekdays
       );
 
-      if (nextOcc <= occurrence) {
-        // Prevent infinite progression
-        break;
-      }
+      if (nextOcc <= occurrence) break;
       occurrence = nextOcc;
     }
   }
 
-  // Sort projections chronologically
   return projections.sort((a, b) => a.date.localeCompare(b.date));
 }

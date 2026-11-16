@@ -46,6 +46,7 @@ export const finUserSettings = pgTable('fin_user_settings', {
   setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true, mode: 'date' }),
   setupSkippedAt: timestamp('setup_skipped_at', { withTimezone: true, mode: 'date' }),
   draft: jsonb('draft').$type<Record<string, unknown>>(),
+  lastRecurringRunDate: date('last_recurring_run_date', { mode: 'string' }),
   dataVersion: bigint('data_version', { mode: 'number' }).notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
     .notNull()
@@ -292,17 +293,52 @@ export const finRecurringRules = pgTable(
     toAccountId: text('to_account_id').references(() => finAccounts.id, { onDelete: 'set null' }),
     categoryId: text('category_id').references(() => finCategories.id, { onDelete: 'set null' }),
     type: text('type', {
-      enum: ['expense', 'income', 'transfer'],
+      enum: ['expense', 'income', 'transfer', 'contribution'],
     }).notNull(),
+    subType: text('sub_type'),
     amount: bigint('amount', { mode: 'number' }).notNull(),
+    amountType: text('amount_type', {
+      enum: ['fixed', 'variable'],
+    })
+      .notNull()
+      .default('fixed'),
     payee: text('payee'),
     note: text('note'),
     frequency: text('frequency', {
       enum: ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'],
     }).notNull(),
     interval: integer('interval').notNull().default(1),
+    weekdays: integer('weekdays').array(),
+    dayOfMonth: text('day_of_month'),
+    monthOfYear: integer('month_of_year'),
     startDate: date('start_date', { mode: 'string' }).notNull(),
     endDate: date('end_date', { mode: 'string' }),
+    maxOccurrences: integer('max_occurrences'),
+    occurrencesCount: integer('occurrences_count').notNull().default(0),
+    mode: text('mode', {
+      enum: ['auto_post', 'ask_confirm'],
+    })
+      .notNull()
+      .default('auto_post'),
+    skippedDates: text('skipped_dates')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    history: jsonb('history')
+      .$type<
+        Array<{
+          effectiveFrom: string;
+          amount?: number;
+          amountType?: 'fixed' | 'variable';
+          frequency?: string;
+          interval?: number;
+          dayOfMonth?: string;
+          weekdays?: number[];
+          monthOfYear?: number;
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     version: integer('version').notNull().default(1),
     nextOccurrence: date('next_occurrence', { mode: 'string' }).notNull(),
     isActive: boolean('is_active').notNull().default(true),
@@ -384,7 +420,7 @@ export const finInbox = pgTable(
       .references(() => profiles.id, { onDelete: 'cascade' }),
     idempotencyKey: text('idempotency_key').notNull(),
     source: text('source', {
-      enum: ['email', 'sms', 'api', 'n8n'],
+      enum: ['email', 'sms', 'api', 'n8n', 'recurring'],
     }).notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true, mode: 'date' }).notNull(),
     date: date('date', { mode: 'string' }).notNull(),
@@ -561,6 +597,36 @@ export const webhookDeliveries = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// fin_job_runs
+// ---------------------------------------------------------------------------
+export const finJobRuns = pgTable(
+  'fin_job_runs',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => newId()),
+    job: text('job').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }).notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+    status: text('status', {
+      enum: ['running', 'completed', 'failed'],
+    })
+      .notNull()
+      .default('running'),
+    usersProcessed: integer('users_processed').notNull().default(0),
+    created: integer('created').notNull().default(0),
+    errorCount: integer('error_count').notNull().default(0),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fin_job_runs_job_started_idx').on(table.job, table.startedAt),
+  ]
+);
+
+// ---------------------------------------------------------------------------
 // Inferred TypeScript domain types
 // ---------------------------------------------------------------------------
 export type Profile = typeof profiles.$inferSelect;
@@ -604,3 +670,6 @@ export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+export type FinJobRun = typeof finJobRuns.$inferSelect;
+export type NewFinJobRun = typeof finJobRuns.$inferInsert;

@@ -7,7 +7,7 @@ export interface OccurrenceProjection {
   ruleName: string;
   date: string; // YYYY-MM-DD
   daysUntil: number;
-  type: 'expense' | 'income' | 'transfer';
+  type: 'expense' | 'income' | 'transfer' | 'contribution';
   amount: number; // paise
   payee?: string | null;
   note?: string | null;
@@ -32,10 +32,12 @@ export interface RuleGenerationDetail {
 }
 
 export interface GenerationResult {
-  processed: number;
-  generated: number;
-  backfilled: number;
+  created: number;
   skipped: number;
+  pending: number;
+  processed: number;
+  generated: number; // backwards compatibility alias for created
+  backfilled: number;
   transactions: TransactionDTO[];
   rulesProcessed: RuleGenerationDetail[];
 }

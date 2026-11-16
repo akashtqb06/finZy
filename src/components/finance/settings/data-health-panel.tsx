@@ -41,6 +41,18 @@ interface DiagnosticsData {
     accounts: number;
     transactions: number;
   };
+  lastDailyJob?: {
+    id: string;
+    job: string;
+    startedAt: string;
+    finishedAt: string | null;
+    status: string;
+    usersProcessed: number;
+    created: number;
+    errorCount: number;
+    hoursSinceLastRun: number | null;
+    isStale: boolean;
+  } | null;
   reconciliation: {
     totalAssets: number;
     totalLiabilities: number;
@@ -189,6 +201,71 @@ export function DataHealthPanel() {
                   {data.counts.transactions} records
                 </div>
               </div>
+            </div>
+
+            {/* Last Daily Job Status */}
+            <div className={`p-3 rounded-lg border space-y-2 ${
+              data.lastDailyJob?.isStale || !data.lastDailyJob
+                ? 'bg-amber-500/10 border-amber-500/30'
+                : 'bg-muted/20'
+            }`}>
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 font-semibold text-foreground">
+                  <span>Last daily job</span>
+                  {data.lastDailyJob ? (
+                    <Badge
+                      variant={
+                        data.lastDailyJob.status === 'completed'
+                          ? data.lastDailyJob.isStale
+                            ? 'destructive'
+                            : 'outline'
+                          : 'destructive'
+                      }
+                      className="text-[10px]"
+                    >
+                      {data.lastDailyJob.status}
+                      {data.lastDailyJob.isStale ? ' (Stale >36h)' : ''}
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" className="text-[10px]">
+                      Never run
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {data.lastDailyJob
+                    ? `Started: ${new Date(data.lastDailyJob.startedAt).toLocaleString()}`
+                    : 'No record in fin_job_runs'}
+                </span>
+              </div>
+
+              {data.lastDailyJob ? (
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="p-2 rounded bg-background/60 border text-[11px]">
+                    <span className="text-muted-foreground">Users Processed:</span>{' '}
+                    <span className="font-semibold">{data.lastDailyJob.usersProcessed}</span>
+                  </div>
+                  <div className="p-2 rounded bg-background/60 border text-[11px]">
+                    <span className="text-muted-foreground">Items Created:</span>{' '}
+                    <span className="font-semibold">{data.lastDailyJob.created}</span>
+                  </div>
+                  <div className="p-2 rounded bg-background/60 border text-[11px]">
+                    <span className="text-muted-foreground">Errors:</span>{' '}
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                      {data.lastDailyJob.errorCount}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {(data.lastDailyJob?.isStale || !data.lastDailyJob) && (
+                <div className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium pt-1">
+                  <AlertCircleIcon className="size-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    Warning: Last daily job has not run within the past 36 hours. Ensure Vercel Cron/Schedule is configured or trigger the job.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Reconciliation Totals */}

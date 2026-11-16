@@ -58,6 +58,28 @@ export const updateAccountSchema = z.object({
 
 export type UpdateAccountDTO = z.infer<typeof updateAccountSchema>;
 
+// Fixed Deposit Metadata Contract
+export const fixedDepositMetadataSchema = z.object({
+  fdType: z.enum(['cumulative', 'payout']).default('cumulative'),
+  principal: z.number().int().positive().optional(),
+  ratePercent: z.number().positive().max(100), // Stored as percent e.g. 7.1
+  startDate: dateStringSchema,
+  maturityDate: dateStringSchema,
+  compounding: z.enum(['monthly', 'quarterly', 'half_yearly', 'yearly']).default('quarterly'),
+  accrualMode: z.enum(['bank', 'smooth']).default('bank'),
+  dayCount: z.enum(['act_365']).default('act_365'),
+  tenureYears: z.number().int().min(0).optional(),
+  tenureMonths: z.number().int().min(0).optional(),
+  tenureDays: z.number().int().min(0).optional(),
+  maturityAmountPerReceipt: z.number().int().positive().optional(),
+  payoutFrequency: z.enum(['monthly', 'quarterly', 'half_yearly', 'yearly', 'at_maturity']).optional(),
+  payoutAccountId: z.string().optional().nullable(),
+  renewal: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export type FixedDepositMetadata = z.infer<typeof fixedDepositMetadataSchema>;
+
 export const accountFiltersSchema = z.object({
   class: z.enum(ACCOUNT_CLASSES).optional(),
   kind: z.enum(ACCOUNT_KINDS).optional(),
@@ -451,14 +473,38 @@ export const recurringRuleSchema = z.object({
   accountId: z.string(),
   toAccountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
-  type: z.enum(['expense', 'income', 'transfer']),
+  type: z.enum(['expense', 'income', 'transfer', 'contribution']),
+  subType: z.string().nullable().optional(),
   amount: positiveMoneyPaiseSchema,
+  amountType: z.enum(['fixed', 'variable']).optional().default('fixed'),
   payee: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   frequency: z.enum(RECURRING_FREQUENCIES),
   interval: z.number().int().min(1).default(1),
+  weekdays: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+  dayOfMonth: z.string().nullable().optional(),
+  monthOfYear: z.number().int().min(1).max(12).nullable().optional(),
   startDate: dateStringSchema,
   endDate: dateStringSchema.nullable().optional(),
+  maxOccurrences: z.number().int().positive().nullable().optional(),
+  occurrencesCount: z.number().int().optional().default(0),
+  mode: z.enum(['auto_post', 'ask_confirm']).optional().default('auto_post'),
+  skippedDates: z.array(dateStringSchema).optional().default([]),
+  history: z
+    .array(
+      z.object({
+        effectiveFrom: dateStringSchema,
+        amount: positiveMoneyPaiseSchema.optional(),
+        amountType: z.enum(['fixed', 'variable']).optional(),
+        frequency: z.enum(RECURRING_FREQUENCIES).optional(),
+        interval: z.number().int().min(1).optional(),
+        dayOfMonth: z.string().optional(),
+        weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+        monthOfYear: z.number().int().min(1).max(12).optional(),
+      })
+    )
+    .optional()
+    .default([]),
   nextOccurrence: dateStringSchema,
   isActive: z.boolean().default(true),
   version: z.number().int().optional(),
@@ -473,14 +519,21 @@ export const createRecurringRuleSchema = z
     accountId: z.string().min(1),
     toAccountId: z.string().nullable().optional(),
     categoryId: z.string().nullable().optional(),
-    type: z.enum(['expense', 'income', 'transfer']),
+    type: z.enum(['expense', 'income', 'transfer', 'contribution']),
+    subType: z.string().nullable().optional(),
     amount: positiveMoneyPaiseSchema,
+    amountType: z.enum(['fixed', 'variable']).optional().default('fixed'),
     payee: z.string().max(200).nullable().optional(),
     note: z.string().max(500).nullable().optional(),
     frequency: z.enum(RECURRING_FREQUENCIES),
     interval: z.number().int().min(1).default(1),
+    weekdays: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+    dayOfMonth: z.string().nullable().optional(),
+    monthOfYear: z.number().int().min(1).max(12).nullable().optional(),
     startDate: dateStringSchema,
     endDate: dateStringSchema.nullable().optional(),
+    maxOccurrences: z.number().int().positive().nullable().optional(),
+    mode: z.enum(['auto_post', 'ask_confirm']).optional().default('auto_post'),
     nextOccurrence: dateStringSchema.optional(),
   })
   .refine(
@@ -496,19 +549,43 @@ export const createRecurringRuleSchema = z
     }
   );
 
-export type CreateRecurringRuleDTO = z.infer<typeof createRecurringRuleSchema>;
+export type CreateRecurringRuleDTO = z.input<typeof createRecurringRuleSchema>;
 
 export const updateRecurringRuleSchema = z.object({
   accountId: z.string().optional(),
   toAccountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
+  type: z.enum(['expense', 'income', 'transfer', 'contribution']).optional(),
+  subType: z.string().nullable().optional(),
   amount: positiveMoneyPaiseSchema.optional(),
+  amountType: z.enum(['fixed', 'variable']).optional(),
   payee: z.string().max(200).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
   frequency: z.enum(RECURRING_FREQUENCIES).optional(),
   interval: z.number().int().min(1).optional(),
+  weekdays: z.array(z.number().int().min(0).max(6)).nullable().optional(),
+  dayOfMonth: z.string().nullable().optional(),
+  monthOfYear: z.number().int().min(1).max(12).nullable().optional(),
   startDate: dateStringSchema.optional(),
   endDate: dateStringSchema.nullable().optional(),
+  maxOccurrences: z.number().int().positive().nullable().optional(),
+  occurrencesCount: z.number().int().optional(),
+  mode: z.enum(['auto_post', 'ask_confirm']).optional(),
+  skippedDates: z.array(dateStringSchema).optional(),
+  history: z
+    .array(
+      z.object({
+        effectiveFrom: dateStringSchema,
+        amount: positiveMoneyPaiseSchema.optional(),
+        amountType: z.enum(['fixed', 'variable']).optional(),
+        frequency: z.enum(RECURRING_FREQUENCIES).optional(),
+        interval: z.number().int().min(1).optional(),
+        dayOfMonth: z.string().optional(),
+        weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+        monthOfYear: z.number().int().min(1).max(12).optional(),
+      })
+    )
+    .optional(),
   nextOccurrence: dateStringSchema.optional(),
   isActive: z.boolean().optional(),
   expectedVersion: z.number().int().optional(),

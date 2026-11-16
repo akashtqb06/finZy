@@ -30,4 +30,15 @@ export interface AccountWithBalance extends AccountDTO {
   maturityDate?: string; // YYYY-MM-DD
   nextInstallmentDate?: string; // YYYY-MM-DD
   pensionMemo?: number; // in paise (for EPF/VPF EPS pension)
+  fdType?: 'cumulative' | 'payout';
+  effectiveYieldPercent?: number;
+  dailyAccrual?: number; // in paise
+  nextCompoundingDate?: string | null;
+  nextPayoutDate?: string | null;
+  totalInterestPaidOut?: number; // in paise
+  differenceFromReceiptText?: string;
+  differenceFromReceiptPaise?: number;
+  accrualMode?: 'bank' | 'smooth';
+  payoutFrequency?: string;
+  payoutAccountId?: string | null;
 }

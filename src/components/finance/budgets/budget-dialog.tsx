@@ -578,7 +578,7 @@ export function BudgetDialog({
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92dvh] overflow-y-auto px-4 pb-6">
           <SheetHeader className="text-left pb-2">
             <SheetTitle className="text-base font-semibold">
               {isEditing ? 'Edit Budget' : 'Set Category Budget'}

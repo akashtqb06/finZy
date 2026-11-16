@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { db, finAccounts, finRecurringRules, finTransactions } from '@src/lib/db';
+import { db, finAccounts, finCategories, finRecurringRules, finTransactions } from '@src/lib/db';
 import { NotFoundError, ConflictError } from '@src/app/api/utils';
 import { incrementDataVersion } from './sync';
 import { ACCOUNT_KIND_CLASS_MAP } from '../constants';
@@ -16,6 +16,14 @@ import {
   type RDConfig,
   type RDDayHistoryItem,
 } from '../domain/rd';
+import {
+  getPayoutFrequencyCount,
+  diffDays,
+  type FDPayoutFrequency,
+} from '../domain/fd';
+import { addMonthsToDate } from '../domain/deposits';
+import { catchUpRecurringRulesIfDue } from '../recurring';
+import { recomputeDepositValuations } from './valuations';
 
 export function mapAccountToDTO(row: typeof finAccounts.$inferSelect): AccountDTO {
   return {
@@ -189,6 +197,139 @@ export async function syncRDAutoDebitRule(
   }
 }
 
+export async function syncFDPayoutRule(
+  userId: string,
+  accountId: string,
+  meta: Record<string, unknown>,
+  accountName: string,
+  accountIsActive: boolean = true
+): Promise<void> {
+  const fdType = (meta.fdType as string) || 'cumulative';
+  const payoutAccountId = (meta.payoutAccountId as string | null) || null;
+  const principal = Number(meta.principalPaise ?? meta.principal ?? 0);
+  const rawRate = Number(meta.ratePercent ?? meta.interestRate ?? meta.rate ?? 7.1);
+  const ratePercent = rawRate > 1 ? rawRate : Number((rawRate * 100).toFixed(2));
+  const subType = `fd_payout_${accountId}`;
+
+  // If not active, or not payout, or no payoutAccountId, or principal <= 0:
+  if (!accountIsActive || fdType !== 'payout' || !payoutAccountId || principal <= 0 || ratePercent <= 0) {
+    await db
+      .update(finRecurringRules)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(finRecurringRules.userId, userId),
+          eq(finRecurringRules.subType, subType)
+        )
+      );
+    return;
+  }
+
+  const startDate = (meta.startDate as string) || new Date().toISOString().slice(0, 10);
+  const tenureMonths = Number(meta.tenureMonths || 12);
+  const maturityDate = (meta.maturityDate as string) || addMonthsToDate(startDate, tenureMonths);
+  const payoutFreq = (meta.payoutFrequency as FDPayoutFrequency) || 'quarterly';
+  const nPayout = getPayoutFrequencyCount(payoutFreq);
+  const stepMonths = payoutFreq === 'at_maturity' ? 12 : Math.max(1, Math.floor(12 / nPayout));
+  const firstPayoutDate = addMonthsToDate(startDate, stepMonths);
+
+  const interestPerPayout = payoutFreq === 'at_maturity'
+    ? Math.round(principal * (ratePercent / 100) * (diffDays(startDate, maturityDate) / 365))
+    : Math.round(principal * (ratePercent / (100 * nPayout)));
+
+  if (interestPerPayout <= 0) return;
+
+  // Find or lookup "Interest" category
+  const [interestCat] = await db
+    .select({ id: finCategories.id })
+    .from(finCategories)
+    .where(
+      and(
+        eq(finCategories.userId, userId),
+        eq(finCategories.name, 'Interest'),
+        eq(finCategories.type, 'income')
+      )
+    )
+    .limit(1);
+
+  // Map frequency and interval for recurring rule
+  let frequency: 'monthly' | 'quarterly' | 'yearly' = 'quarterly';
+  let interval = 1;
+  if (payoutFreq === 'monthly') {
+    frequency = 'monthly';
+    interval = 1;
+  } else if (payoutFreq === 'quarterly') {
+    frequency = 'quarterly';
+    interval = 1;
+  } else if (payoutFreq === 'half_yearly') {
+    frequency = 'monthly';
+    interval = 6;
+  } else {
+    frequency = 'yearly';
+    interval = 1;
+  }
+
+  const note = `FD Interest Payout: ${accountName}`;
+  const payee = `${accountName} Interest`;
+
+  const [existingRule] = await db
+    .select()
+    .from(finRecurringRules)
+    .where(
+      and(
+        eq(finRecurringRules.userId, userId),
+        eq(finRecurringRules.subType, subType)
+      )
+    )
+    .limit(1);
+
+  if (existingRule) {
+    await db
+      .update(finRecurringRules)
+      .set({
+        accountId: payoutAccountId,
+        categoryId: interestCat?.id || null,
+        amount: interestPerPayout,
+        frequency,
+        interval,
+        startDate: firstPayoutDate,
+        endDate: maturityDate,
+        note,
+        payee,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(finRecurringRules.id, existingRule.id));
+  } else {
+    await db.insert(finRecurringRules).values({
+      userId,
+      accountId: payoutAccountId,
+      toAccountId: null,
+      categoryId: interestCat?.id || null,
+      type: 'income',
+      subType,
+      amount: interestPerPayout,
+      amountType: 'fixed',
+      frequency,
+      interval,
+      startDate: firstPayoutDate,
+      endDate: maturityDate,
+      nextOccurrence: firstPayoutDate,
+      note,
+      payee,
+      mode: 'auto_post',
+      isActive: true,
+    });
+  }
+
+  // Trigger catch-up so any due payouts generate idempotently
+  try {
+    await catchUpRecurringRulesIfDue(userId);
+  } catch (err) {
+    console.warn('[syncFDPayoutRule] catchUpRecurringRulesIfDue failed:', err);
+  }
+}
+
 export async function createAccount(
   userId: string,
   data: CreateAccountDTO
@@ -227,6 +368,21 @@ export async function createAccount(
       );
     } catch (err) {
       console.warn(`[createAccount] syncRDAutoDebitRule failed for ${row.id}:`, err);
+    }
+  }
+
+  if (row.kind === 'fixed_deposit') {
+    try {
+      await syncFDPayoutRule(
+        userId,
+        row.id,
+        (row.metadata || {}) as Record<string, unknown>,
+        row.name,
+        row.isActive
+      );
+      await recomputeDepositValuations(userId, row.id);
+    } catch (err) {
+      console.warn(`[createAccount] syncFDPayoutRule failed for ${row.id}:`, err);
     }
   }
 
@@ -284,6 +440,21 @@ export async function updateAccount(
     }
   }
 
+  if (updated.kind === 'fixed_deposit') {
+    try {
+      await syncFDPayoutRule(
+        userId,
+        updated.id,
+        (updated.metadata || {}) as Record<string, unknown>,
+        updated.name,
+        updated.isActive
+      );
+      await recomputeDepositValuations(userId, updated.id);
+    } catch (err) {
+      console.warn(`[updateAccount] syncFDPayoutRule failed for ${updated.id}:`, err);
+    }
+  }
+
   return mapAccountToDTO(updated);
 }
 
@@ -301,7 +472,7 @@ export async function deleteAccount(
   }
 
   await db.transaction(async (tx) => {
-    // Deactivate any recurring rule pointing to this RD
+    // Deactivate any recurring rule pointing to this RD or FD payout
     try {
       await tx
         .update(finRecurringRules)
@@ -309,7 +480,7 @@ export async function deleteAccount(
         .where(
           and(
             eq(finRecurringRules.userId, userId),
-            eq(finRecurringRules.toAccountId, accountId)
+            sql`(${finRecurringRules.toAccountId} = ${accountId} OR ${finRecurringRules.subType} = ${'fd_payout_' + accountId})`
           )
         );
     } catch (err) {

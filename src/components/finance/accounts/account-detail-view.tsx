@@ -8,15 +8,23 @@ import {
   PlusIcon,
   CreditCardIcon,
   TrendingUpIcon,
-  PiggyBankIcon,
   Trash2Icon,
   AlertCircleIcon,
   RefreshCwIcon,
+  MoreHorizontalIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import {
   formatINR,
@@ -29,6 +37,7 @@ import { useBreadcrumbStore } from '@src/components/layout/breadcrumb-store';
 import { UpdateValuationDialog } from './update-valuation-dialog';
 import { EditAccountOpeningDialog } from './edit-account-opening-dialog';
 import { RDDetailSection } from './rd-detail-section';
+import { FDDetailSection } from './fd-detail-section';
 import { EpfDetailSection } from './epf-detail-section';
 import { TransactionTable } from '../transactions/transaction-table';
 import { cn } from '@/lib/utils';
@@ -36,6 +45,7 @@ import { useAppModal } from '@/components/ui/app-modal';
 
 export function AccountDetailView({ accountId }: { accountId: string }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const { showConfirm } = useAppModal();
   const setCrumbs = useBreadcrumbStore((s) => s.setCrumbs);
   const {
@@ -171,44 +181,51 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
           <span>Back to Accounts</span>
         </Link>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl border bg-card shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl border bg-card shadow-xs">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground truncate" title={account.name}>
                 {account.name}
               </h2>
-              <Badge variant="outline" className="text-xs uppercase font-semibold">
+              <Badge variant="outline" className="text-[10px] sm:text-xs uppercase font-semibold">
                 {account.kind.replace('_', ' ')}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Currency: {account.currency} • Status: {account.isActive ? 'Active' : 'Archived'}
-            </p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
+                {formatINR(isLiability ? account.outstanding : (account.currentValue || account.balance))}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {isLiability ? 'outstanding' : 'current balance'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {isCard && account.outstanding > 0 && (
-              <Button
-                type="button"
-                size="sm"
-                className="gap-1.5 text-xs font-semibold shadow-xs"
-                onClick={() => openPayBill(account.id)}
-              >
-                <CreditCardIcon className="size-3.5" />
-                <span>Pay Bill ({formatINR(account.outstanding)})</span>
-              </Button>
-            )}
+          {/* Primary actions as a horizontal chip row on mobile, full buttons on desktop */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1 sm:pt-0">
+            {/* Primary Action 1: Add */}
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="min-h-[38px] text-xs font-semibold gap-1.5 shrink-0 rounded-full sm:rounded-md px-3.5 shadow-xs"
+              onClick={() => openQuickAdd({ accountId: account.id })}
+            >
+              <PlusIcon className="size-3.5" />
+              <span>Add</span>
+            </Button>
 
+            {/* Primary Action 2: Reconcile / Recalculate (Investments / Deposits) */}
             {isInvestment && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                className="gap-1.5 text-xs font-semibold"
+                className="min-h-[38px] text-xs font-semibold gap-1.5 shrink-0 rounded-full sm:rounded-md px-3.5"
                 onClick={() => setValuationOpen(true)}
               >
                 <TrendingUpIcon className="size-3.5 text-primary" />
-                <span>Update Value</span>
+                <span>Reconcile</span>
               </Button>
             )}
 
@@ -218,45 +235,60 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
                 size="sm"
                 variant="outline"
                 disabled={isRecalculating}
-                className="gap-1.5 text-xs font-semibold"
+                className="min-h-[38px] text-xs font-semibold gap-1.5 shrink-0 rounded-full sm:rounded-md px-3.5"
                 onClick={handleRecalculate}
               >
                 <RefreshCwIcon className={cn('size-3.5 text-primary', isRecalculating && 'animate-spin')} />
-                <span>{isRecalculating ? 'Recalculating...' : 'Recalculate'}</span>
+                <span>Reconcile</span>
               </Button>
             )}
 
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="gap-1.5 text-xs font-semibold"
-              onClick={() => openQuickAdd({ accountId: account.id })}
-            >
-              <PlusIcon className="size-3.5" />
-              <span>Add Transaction</span>
-            </Button>
+            {/* Primary Action 3: Pay bill (Cards) */}
+            {isCard && account.outstanding > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                className="min-h-[38px] text-xs font-semibold gap-1.5 shrink-0 rounded-full sm:rounded-md px-3.5 shadow-xs"
+                onClick={() => openPayBill(account.id)}
+              >
+                <CreditCardIcon className="size-3.5" />
+                <span>Pay bill</span>
+              </Button>
+            )}
 
+            {/* Primary Action 4: Edit */}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="text-xs font-medium"
+              className="min-h-[38px] text-xs font-medium shrink-0 rounded-full sm:rounded-md px-3.5"
               onClick={() => setEditOpeningOpen(true)}
             >
-              <span>Edit Opening</span>
+              <span>Edit</span>
             </Button>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="size-8 p-0 text-muted-foreground hover:text-destructive"
-              onClick={handleDelete}
-              title="Delete Account"
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
+            {/* Rest in a dropdown menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                nativeButton={true}
+                className="min-h-[38px] min-w-[38px] p-2 rounded-full sm:rounded-md border bg-card hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                aria-label="More account options"
+              >
+                <MoreHorizontalIcon className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={handleRecalculate} disabled={isRecalculating}>
+                    <RefreshCwIcon className="size-3.5 mr-2" />
+                    <span>Recalculate Balances</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+                    <Trash2Icon className="size-3.5 mr-2" />
+                    <span>Delete Account</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -295,7 +327,7 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-lg bg-muted/40 border">
               <span className="text-[11px] text-muted-foreground">
                 {account.balance < 0 ? 'Outstanding Debt' : account.balance > 0 ? 'Credit Balance' : 'Card Balance'}
@@ -402,7 +434,7 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 rounded-lg bg-muted/40 border">
               <span className="text-[11px] text-muted-foreground">Current Market Value</span>
               <div className="text-xl font-bold text-foreground mt-0.5">
@@ -476,87 +508,11 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
       )}
 
       {account.kind === 'fixed_deposit' && (
-        <div className="p-4 rounded-xl border bg-card space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <PiggyBankIcon className="size-4 text-amber-500" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Fixed Deposit Details
-              </h3>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={isRecalculating}
-              className="h-7 text-xs gap-1.5"
-              onClick={handleRecalculate}
-            >
-              <RefreshCwIcon
-                className={cn('size-3 text-primary', isRecalculating && 'animate-spin')}
-              />
-              <span>{isRecalculating ? 'Recalculating...' : 'Recalculate'}</span>
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Accrued Value</span>
-              <div className="text-xl font-bold text-foreground mt-0.5">
-                {formatINR(account.accruedValue ?? account.balance)}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Interest Earned</span>
-              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                +{formatINR(account.interestEarned ?? 0)}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Principal</span>
-              <div className="text-xl font-bold text-foreground mt-0.5">
-                {formatINR(account.principal ?? account.balance)}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Projected Maturity</span>
-              <div className="text-xl font-bold text-primary mt-0.5">
-                {formatINR(account.projectedMaturityAmount ?? account.balance)}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Interest Rate</span>
-              <div className="text-xl font-bold text-foreground mt-0.5">
-                {account.interestRate !== undefined ? `${account.interestRate}% p.a.` : '—'}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Compounding</span>
-              <div className="text-base font-semibold capitalize text-foreground mt-1">
-                {account.compoundingFrequency || 'Quarterly'}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Days to Maturity</span>
-              <div className="text-xl font-bold text-foreground mt-0.5">
-                {account.daysToMaturity !== undefined ? `${account.daysToMaturity} days` : '—'}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border">
-              <span className="text-[11px] text-muted-foreground">Maturity Date</span>
-              <div className="text-base font-semibold text-foreground mt-1">
-                {account.maturityDate || '—'}
-              </div>
-            </div>
-          </div>
-        </div>
+        <FDDetailSection
+          account={account}
+          onRefreshNeeded={() => recalculateAccount(account.id)}
+          onEdit={() => setEditOpeningOpen(true)}
+        />
       )}
 
       {/* Balance Trend Chart */}
@@ -603,11 +559,12 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
           </Alert>
         )}
 
-        <div className="h-60 w-full">
+        <div className="w-full" style={{ height: isMobile ? 180 : 240 }}>
           <FinanceAreaChart
             data={chartPoints}
             label={isLiability ? 'Outstanding' : 'Balance'}
-            height={240}
+            height={isMobile ? 180 : 240}
+            tickCount={isMobile ? 3 : 5}
           />
         </div>
 

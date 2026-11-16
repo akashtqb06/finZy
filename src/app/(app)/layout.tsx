@@ -10,6 +10,7 @@ import { AppSettingsProvider } from '@src/components/settings/app-settings-provi
 import { FinanceSyncProvider } from '@src/components/finance/shared/finance-sync-provider';
 import { getPublicSettings } from '@src/lib/settings/app-settings';
 import { requireUser } from '@src/lib/auth/dal';
+import { triggerLazyRecurringGeneration } from '@src/lib/finance/recurring';
 import { Skeleton } from '@/components/ui/skeleton';
 import { checkDatabaseHealth } from '@src/lib/db/health';
 import { DatabaseErrorPage } from '@src/components/db/database-error-page';
@@ -71,6 +72,7 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
     let user: SafeUser;
     try {
         user = await requireUser();
+        await triggerLazyRecurringGeneration(user.id);
     } catch (err) {
         if (isRedirectError(err)) {
             throw err;
@@ -91,7 +93,7 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
                         <AppSidebar />
                         <SidebarInset className="flex flex-col min-h-0 min-w-0 h-dvh overflow-hidden">
                             <AppHeader />
-                            <main className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
+                            <div className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden">{children}</div>
                             <BottomNav />
                         </SidebarInset>
                     </SidebarProvider>

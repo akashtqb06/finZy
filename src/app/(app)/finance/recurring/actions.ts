@@ -12,11 +12,13 @@ import type {
 } from '@src/lib/finance/contract';
 import {
   generateDueRecurringTransactions,
+  getUserTimezone,
   projectUpcomingOccurrences,
+  skipNextRecurringRule,
   type GenerationResult,
   type OccurrenceProjection,
 } from '@src/lib/finance/recurring';
-import { todayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
+import { todayInTz } from '@src/lib/finance/timezone';
 
 export interface RecurringPageData {
   rules: RecurringRuleDTO[];
@@ -32,7 +34,8 @@ export interface RecurringPageData {
 export async function getRecurringPageDataAction(): Promise<RecurringPageData> {
   const user = await requireUserApi();
   const service = getFinanceService();
-  const today = todayInTz(DEFAULT_TZ);
+  const tz = await getUserTimezone(user.id);
+  const today = todayInTz(tz);
 
   // Catch up any due occurrences up to today before projecting
   await generateDueRecurringTransactions({
@@ -71,7 +74,8 @@ export async function getRecurringPageDataAction(): Promise<RecurringPageData> {
  */
 export async function generateDueNowAction(): Promise<GenerationResult> {
   const user = await requireUserApi();
-  const today = todayInTz(DEFAULT_TZ);
+  const tz = await getUserTimezone(user.id);
+  const today = todayInTz(tz);
   const result = await generateDueRecurringTransactions({
     userId: user.id,
     asOfDate: today,
@@ -79,6 +83,7 @@ export async function generateDueNowAction(): Promise<GenerationResult> {
   revalidatePath('/finance');
   revalidatePath('/finance/accounts');
   revalidatePath('/finance/transactions');
+  revalidatePath('/finance/recurring');
   return result;
 }
 
@@ -91,7 +96,8 @@ export async function createRecurringRuleAction(
   const user = await requireUserApi();
   const service = getFinanceService();
   const rule = await service.createRecurringRule(user.id, data);
-  const today = todayInTz(DEFAULT_TZ);
+  const tz = await getUserTimezone(user.id);
+  const today = todayInTz(tz);
   await generateDueRecurringTransactions({
     userId: user.id,
     asOfDate: today,
@@ -99,6 +105,7 @@ export async function createRecurringRuleAction(
   revalidatePath('/finance');
   revalidatePath('/finance/accounts');
   revalidatePath('/finance/transactions');
+  revalidatePath('/finance/recurring');
   return { success: true, rule };
 }
 
@@ -112,7 +119,8 @@ export async function updateRecurringRuleAction(
   const user = await requireUserApi();
   const service = getFinanceService();
   const rule = await service.updateRecurringRule(user.id, id, data);
-  const today = todayInTz(DEFAULT_TZ);
+  const tz = await getUserTimezone(user.id);
+  const today = todayInTz(tz);
   await generateDueRecurringTransactions({
     userId: user.id,
     asOfDate: today,
@@ -120,6 +128,19 @@ export async function updateRecurringRuleAction(
   revalidatePath('/finance');
   revalidatePath('/finance/accounts');
   revalidatePath('/finance/transactions');
+  revalidatePath('/finance/recurring');
+  return { success: true, rule };
+}
+
+/**
+ * Skips the next occurrence of a rule.
+ */
+export async function skipNextRecurringRuleAction(
+  id: string
+): Promise<{ success: boolean; rule: RecurringRuleDTO }> {
+  const user = await requireUserApi();
+  const rule = await skipNextRecurringRule(user.id, id);
+  revalidatePath('/finance/recurring');
   return { success: true, rule };
 }
 
@@ -134,7 +155,8 @@ export async function toggleRecurringRuleAction(
   const service = getFinanceService();
   const rule = await service.updateRecurringRule(user.id, id, { isActive });
   if (isActive) {
-    const today = todayInTz(DEFAULT_TZ);
+    const tz = await getUserTimezone(user.id);
+    const today = todayInTz(tz);
     await generateDueRecurringTransactions({
       userId: user.id,
       asOfDate: today,
@@ -143,6 +165,7 @@ export async function toggleRecurringRuleAction(
   revalidatePath('/finance');
   revalidatePath('/finance/accounts');
   revalidatePath('/finance/transactions');
+  revalidatePath('/finance/recurring');
   return { success: true, rule };
 }
 
@@ -155,5 +178,6 @@ export async function deleteRecurringRuleAction(
   const user = await requireUserApi();
   const service = getFinanceService();
   await service.deleteRecurringRule(user.id, id);
+  revalidatePath('/finance/recurring');
   return { success: true };
 }

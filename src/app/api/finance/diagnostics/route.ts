@@ -1,8 +1,8 @@
 import 'server-only';
 import { requireUserApi } from '@src/lib/auth/dal';
 import { handleApiError } from '@src/app/api/utils';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { db, finAccounts, finTransactions } from '@src/lib/db';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { db, finAccounts, finJobRuns, finTransactions } from '@src/lib/db';
 import { jsonNoStore } from '../utils';
 import { todayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';
 import { getNetWorthHistory } from '@src/lib/finance/db-service/history';
@@ -98,6 +98,27 @@ export async function GET() {
       );
     }
 
+    const [lastJob] = await db
+      .select({
+        id: finJobRuns.id,
+        job: finJobRuns.job,
+        startedAt: finJobRuns.startedAt,
+        finishedAt: finJobRuns.finishedAt,
+        status: finJobRuns.status,
+        usersProcessed: finJobRuns.usersProcessed,
+        created: finJobRuns.created,
+        errorCount: finJobRuns.errorCount,
+      })
+      .from(finJobRuns)
+      .where(eq(finJobRuns.job, 'daily'))
+      .orderBy(desc(finJobRuns.startedAt))
+      .limit(1);
+
+    const now = Date.now();
+    const lastJobRunStarted = lastJob?.startedAt ? new Date(lastJob.startedAt).getTime() : null;
+    const hoursSinceLastRun = lastJobRunStarted ? (now - lastJobRunStarted) / (1000 * 60 * 60) : null;
+    const isStale = hoursSinceLastRun === null || hoursSinceLastRun > 36;
+
     return jsonNoStore({
       backend,
       databaseConnected: true,
@@ -107,6 +128,20 @@ export async function GET() {
         accounts: Number(accountsCount?.count ?? 0),
         transactions: Number(txCount?.count ?? 0),
       },
+      lastDailyJob: lastJob
+        ? {
+            id: lastJob.id,
+            job: lastJob.job,
+            startedAt: lastJob.startedAt.toISOString(),
+            finishedAt: lastJob.finishedAt?.toISOString() ?? null,
+            status: lastJob.status,
+            usersProcessed: lastJob.usersProcessed,
+            created: lastJob.created,
+            errorCount: lastJob.errorCount,
+            hoursSinceLastRun,
+            isStale,
+          }
+        : null,
       reconciliation: {
         totalAssets,
         totalLiabilities,
