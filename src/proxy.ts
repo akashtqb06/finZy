@@ -1,7 +1,22 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { validateRequestOrigin } from '@src/lib/security/origin';
+import { updateSession } from '@src/lib/supabase/proxy';
 
-export function proxy(request: NextRequest) {
+export function isSafeRelativePath(path: string | null | undefined): boolean {
+    if (!path || typeof path !== 'string') return false;
+    if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) {
+        return false;
+    }
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path)) {
+        return false;
+    }
+    if (path.includes('\\')) {
+        return false;
+    }
+    return true;
+}
+
+export async function proxy(request: NextRequest) {
     // CSRF / Origin verification on mutating requests
     const originCheck = validateRequestOrigin(request);
     if (!originCheck.ok) {
@@ -9,34 +24,48 @@ export function proxy(request: NextRequest) {
     }
 
     const { pathname, search } = request.nextUrl;
-    const isPublicPage = pathname === '/login' || pathname === '/register';
     const isApi = pathname.startsWith('/api/') || pathname === '/api';
-    const isNextAsset = pathname.startsWith('/_next/');
-    const isStaticFile = /\.[^/]+$/.test(pathname);
-    const isFavicon = pathname === '/favicon.ico';
+    const isPublicAuthPage =
+        pathname === '/login' ||
+        pathname === '/register' ||
+        pathname === '/forgot-password' ||
+        pathname === '/reset-password' ||
+        pathname === '/invite-accept' ||
+        pathname === '/mfa' ||
+        pathname.startsWith('/auth/');
 
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-pathname', pathname);
+    // Refresh Supabase auth cookies
+    const { supabaseResponse, user } = await updateSession(request);
 
-    if (isPublicPage || isApi || isNextAsset || isStaticFile || isFavicon) {
-        return NextResponse.next({
-            request: {
-                headers: requestHeaders,
-            },
-        });
+    // Set x-pathname for layout and DAL helpers
+    supabaseResponse.headers.set('x-pathname', pathname);
+
+    // Real authorization checks live in the DAL (requireUserApi returns 401 JSON)
+    if (isApi || isPublicAuthPage) {
+        return supabaseResponse;
     }
 
-    if (request.cookies.get('session')?.value) {
-        return NextResponse.next({
-            request: {
-                headers: requestHeaders,
-            },
+    // Optimistic redirect of unauthenticated page requests to /login?next=...
+    if (!user) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = '/login';
+        loginUrl.search = '';
+        const currentPath = `${pathname}${search}`;
+        const safeNext = isSafeRelativePath(currentPath) ? currentPath : '/';
+        loginUrl.searchParams.set('next', safeNext);
+
+        const redirectResponse = NextResponse.redirect(loginUrl);
+        supabaseResponse.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie.name, cookie.value, cookie);
         });
+        return redirectResponse;
     }
 
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = '/login';
-    loginUrl.search = '';
-    loginUrl.searchParams.set('next', `${pathname}${search}`);
-    return NextResponse.redirect(loginUrl);
+    return supabaseResponse;
 }
+
+export const config = {
+    matcher: [
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ico|woff|woff2|ttf|otf)$).*)',
+    ],
+};

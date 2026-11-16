@@ -311,7 +311,9 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
 
       // In case auto-catchup of recurring rules created new transactions during the fetch,
       // refresh accounts so account balances, invested amounts, and gains stay synchronized.
-      void get().refreshAccounts().catch(() => {});
+      if (get().isInitialized) {
+        void get().refreshAccounts().catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to load transactions:', err);
       set({ transactionsStatus: 'error' });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db, finAccounts, finRecurringRules, finTransactions } from '@src/lib/db';
 import { setupFinanceTestDb, USER_A, USER_B } from './test-helper';
 import type { DbFinanceService } from '../../db-service';
@@ -10,6 +10,8 @@ describe('RD Auto-Debit & Integration Tests on PGlite', () => {
   let service: DbFinanceService;
 
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-01T00:00:00Z'));
     service = await setupFinanceTestDb();
     // Clean up test transactions, rules, and accounts for USER_A and USER_B
     await db.delete(finTransactions).where(eq(finTransactions.userId, USER_A));
@@ -18,6 +20,10 @@ describe('RD Auto-Debit & Integration Tests on PGlite', () => {
     await db.delete(finRecurringRules).where(eq(finRecurringRules.userId, USER_B));
     await db.delete(finAccounts).where(eq(finAccounts.userId, USER_A));
     await db.delete(finAccounts).where(eq(finAccounts.userId, USER_B));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('creates an auto-debit recurring rule, generates transfers, is idempotent, and preserves net worth', async () => {

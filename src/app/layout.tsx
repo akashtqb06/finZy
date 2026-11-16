@@ -15,6 +15,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@src/components/theme-provider";
 import { AppModalProvider } from "@/components/ui/app-modal";
+import { ServiceWorkerCleanup } from "@src/components/layout/service-worker-cleanup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -114,6 +115,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppModalProvider>
+            <ServiceWorkerCleanup />
             {children}
             <Toaster richColors closeButton position="top-right" />
           </AppModalProvider>
