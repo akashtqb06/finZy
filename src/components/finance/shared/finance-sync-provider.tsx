@@ -112,6 +112,7 @@ export function FinanceSyncProvider({
 
   // Initial dataVersion check
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void triggerRefetch();
   }, [triggerRefetch]);
 

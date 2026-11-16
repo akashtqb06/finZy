@@ -105,6 +105,7 @@ export function EpfRateDialog({
               <Input
                 id="epf-rate"
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 min="0"
                 max="20"

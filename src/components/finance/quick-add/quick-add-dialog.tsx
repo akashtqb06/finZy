@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { nanoid } from 'nanoid';
 import {
   CreditCardIcon,
-  CheckIcon,
   ArrowRightLeftIcon,
   SparklesIcon,
   AlertTriangleIcon,
@@ -26,7 +25,6 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import { parseAmountExpression } from '../shared/expression-parser';
-import { getDeterministicCategoryColor } from '@src/lib/finance/colors';
 import { formatINR, formatAccountDisplayBalance } from '../shared/format';
 import { CategoryCombobox } from '../shared/category-combobox';
 import { todayInTz, yesterdayInTz, DEFAULT_TZ } from '@src/lib/finance/timezone';

@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { SearchIcon, CopyIcon } from 'lucide-react';
+import { CopyIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -22,13 +28,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import {
   getMonthDateRange,
   formatMonthLabel,
   getCurrentMonthString,
 } from '@src/lib/finance/budgets/progress';
-import { getDeterministicCategoryColor } from '@src/lib/finance/colors';
 import { formatINR } from '../shared/format';
 import { CategoryCombobox } from '../shared/category-combobox';
 import type { BudgetDTO } from '@src/lib/finance/contract';
@@ -522,6 +528,8 @@ export function BudgetDialog({
   onCopyLastMonth,
   copyCandidatesCount,
 }: BudgetDialogProps) {
+  const isMobile = useIsMobile();
+
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
@@ -548,6 +556,40 @@ export function BudgetDialog({
 
   const isEditing = Boolean(budget);
 
+  const formElement = open ? (
+    <BudgetForm
+      key={budget?.id ?? 'create'}
+      budget={budget}
+      activeMonth={activeMonth}
+      onSuccess={() => handleOpenChange(false)}
+      onCancel={() => handleOpenChange(false)}
+      onCopyLastMonth={
+        onCopyLastMonth
+          ? () => {
+              handleOpenChange(false);
+              onCopyLastMonth();
+            }
+          : undefined
+      }
+      copyCandidatesCount={copyCandidatesCount}
+    />
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+          <SheetHeader className="text-left pb-2">
+            <SheetTitle className="text-base font-semibold">
+              {isEditing ? 'Edit Budget' : 'Set Category Budget'}
+            </SheetTitle>
+          </SheetHeader>
+          {formElement}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -556,24 +598,7 @@ export function BudgetDialog({
             {isEditing ? 'Edit Budget' : 'Set Category Budget'}
           </DialogTitle>
         </DialogHeader>
-        {open && (
-          <BudgetForm
-            key={budget?.id ?? 'create'}
-            budget={budget}
-            activeMonth={activeMonth}
-            onSuccess={() => handleOpenChange(false)}
-            onCancel={() => handleOpenChange(false)}
-            onCopyLastMonth={
-              onCopyLastMonth
-                ? () => {
-                    handleOpenChange(false);
-                    onCopyLastMonth();
-                  }
-                : undefined
-            }
-            copyCandidatesCount={copyCandidatesCount}
-          />
-        )}
+        {formElement}
       </DialogContent>
     </Dialog>
   );

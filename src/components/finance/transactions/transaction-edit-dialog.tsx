@@ -51,6 +51,7 @@ export function TransactionEditDialog({
 
   useEffect(() => {
     if (transaction) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAmountStr((transaction.amount / 100).toString());
       setDate(transaction.date);
       setAccountId(transaction.accountId);

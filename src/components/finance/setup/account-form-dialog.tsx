@@ -394,6 +394,7 @@ export function AccountFormDialog({
                   <Input
                     id="acc-stmt-day"
                     type="number"
+                    inputMode="decimal"
                     min={1}
                     max={31}
                     placeholder="15"
@@ -409,6 +410,7 @@ export function AccountFormDialog({
                   <Input
                     id="acc-due-day"
                     type="number"
+                    inputMode="decimal"
                     min={1}
                     max={60}
                     placeholder="20"

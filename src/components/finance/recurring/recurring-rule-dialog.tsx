@@ -9,6 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -22,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { paiseToRupees, rupeesToPaise } from '@src/components/finance/shared/format';
 import { CategoryCombobox } from '../shared/category-combobox';
 import type {
@@ -307,10 +314,6 @@ function RecurringRuleForm({
     }
   };
 
-  const filteredCategories = categories.filter(
-    (c) => c.type === (type === 'income' ? 'income' : 'expense')
-  );
-
   return (
     <div>
       {/* Quick Presets (Only on Create) */}
@@ -388,6 +391,7 @@ function RecurringRuleForm({
             <Input
               id="rule-amount"
               type="number"
+              inputMode="decimal"
               step="any"
               placeholder="0.00"
               value={amountRupees}
@@ -436,6 +440,7 @@ function RecurringRuleForm({
             <Input
               id="rule-interval"
               type="number"
+              inputMode="decimal"
               min="1"
               value={interval}
               onChange={(e) => setInterval(Math.max(1, parseInt(e.target.value, 10) || 1))}
@@ -460,6 +465,7 @@ function RecurringRuleForm({
               <Input
                 id="rule-dom"
                 type="number"
+                inputMode="decimal"
                 min="1"
                 max="31"
                 value={dayOfMonth}
@@ -642,6 +648,8 @@ export function RecurringRuleDialog({
   categories,
   onSuccess,
 }: RecurringRuleDialogProps) {
+  const isMobile = useIsMobile();
+
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
@@ -654,6 +662,33 @@ export function RecurringRuleDialog({
     }
   };
 
+  const formContent = open ? (
+    <RecurringRuleForm
+      key={ruleToEdit?.id ?? `new_${initialPresetId || 'blank'}`}
+      ruleToEdit={ruleToEdit}
+      initialPresetId={initialPresetId}
+      accounts={accounts}
+      categories={categories}
+      onClose={() => handleOpenChange(false)}
+      onSuccess={onSuccess}
+    />
+  ) : null;
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+          <SheetHeader className="text-left pb-2">
+            <SheetTitle className="text-base font-bold">
+              {ruleToEdit ? 'Edit Recurring Rule' : 'Create Recurring Rule'}
+            </SheetTitle>
+          </SheetHeader>
+          {formContent}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
@@ -662,18 +697,7 @@ export function RecurringRuleDialog({
             {ruleToEdit ? 'Edit Recurring Rule' : 'Create Recurring Rule'}
           </DialogTitle>
         </DialogHeader>
-
-        {open && (
-          <RecurringRuleForm
-            key={ruleToEdit?.id ?? `new_${initialPresetId || 'blank'}`}
-            ruleToEdit={ruleToEdit}
-            initialPresetId={initialPresetId}
-            accounts={accounts}
-            categories={categories}
-            onClose={() => handleOpenChange(false)}
-            onSuccess={onSuccess}
-          />
-        )}
+        {formContent}
       </DialogContent>
     </Dialog>
   );

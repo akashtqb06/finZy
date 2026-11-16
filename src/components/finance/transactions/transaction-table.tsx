@@ -642,6 +642,7 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
             </label>
             <Input
               type="number"
+              inputMode="decimal"
               placeholder="0"
               className="h-8 text-xs bg-card"
               value={minAmount}
@@ -655,6 +656,7 @@ export function TransactionTable({ accountId }: { accountId?: string } = {}) {
             </label>
             <Input
               type="number"
+              inputMode="decimal"
               placeholder="No limit"
               className="h-8 text-xs bg-card"
               value={maxAmount}

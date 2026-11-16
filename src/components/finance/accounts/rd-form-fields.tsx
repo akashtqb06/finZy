@@ -129,6 +129,7 @@ export function RDFormFields(props: RDFormFieldsProps) {
           <Input
             id="rd-inst-amount"
             type="number"
+            inputMode="decimal"
             min="1"
             placeholder="5000"
             className="h-9 text-xs bg-card"
@@ -145,6 +146,7 @@ export function RDFormFields(props: RDFormFieldsProps) {
           <Input
             id="rd-interest-rate"
             type="number"
+            inputMode="decimal"
             step="0.05"
             placeholder="6.8"
             className="h-9 text-xs bg-card"
@@ -177,6 +179,7 @@ export function RDFormFields(props: RDFormFieldsProps) {
           <Input
             id="rd-tenure-months"
             type="number"
+            inputMode="decimal"
             min="1"
             max="120"
             placeholder="12"
@@ -361,6 +364,7 @@ export function RDFormFields(props: RDFormFieldsProps) {
           <Input
             id="rd-anchor-value"
             type="number"
+            inputMode="decimal"
             placeholder="Leave blank to calculate automatically"
             className="h-9 text-xs bg-card"
             value={currentValueRupees}

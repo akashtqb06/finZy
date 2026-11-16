@@ -12,7 +12,7 @@
     "db:start": "DO_NOT_TRACK=1 SUPABASE_TELEMETRY=false supabase start",
     "db:stop": "DO_NOT_TRACK=1 SUPABASE_TELEMETRY=false supabase stop",
     "db:status": "DO_NOT_TRACK=1 SUPABASE_TELEMETRY=false supabase status",
-    "dev:user": "tsx scripts/dev-user.ts",
+    "dev:user": "tsx --conditions=react-server scripts/dev-user.ts",
     "db:check-rls": "tsx scripts/check-rls.ts",
     "db:generate": "drizzle-kit generate",
     "db:create-local": "tsx scripts/create-local-db.ts",

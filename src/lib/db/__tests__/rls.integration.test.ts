@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
 import { PGlite } from '@electric-sql/pglite';
@@ -8,6 +9,26 @@ import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'src/lib/db/migrations');
+
+function getIntegrationDbUrl(): string {
+    if (process.env.DIRECT_URL) return process.env.DIRECT_URL;
+    if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+    const envLocalPath = path.resolve(process.cwd(), '.env.local');
+    if (fs.existsSync(envLocalPath)) {
+        const content = fs.readFileSync(envLocalPath, 'utf-8');
+        for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+                const [k, ...rest] = trimmed.split('=');
+                const key = k.trim();
+                if (key === 'DIRECT_URL' || key === 'DATABASE_URL') {
+                    return rest.join('=').trim().replace(/^["']|["']$/g, '');
+                }
+            }
+        }
+    }
+    return 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
+}
 
 describe('RLS Defense-in-Depth & Permissions (PGlite)', () => {
     it('enforces SELECT-own and denies cross-user read access via auth.uid()', async () => {
@@ -105,15 +126,10 @@ const isIntegration = process.env.RUN_INTEGRATION === '1';
 const describeIntegration = isIntegration ? describe : describe.skip;
 
 describeIntegration('Supabase Local Stack RLS Integration Tests (RUN_INTEGRATION=1)', () => {
-    const directUrl =
-        process.env.DIRECT_URL ||
-        process.env.DATABASE_URL ||
-        'postgres://postgres:postgres@127.0.0.1:54322/postgres';
-
     let pool: pg.Pool;
 
     beforeAll(() => {
-        pool = new pg.Pool({ connectionString: directUrl, max: 2 });
+        pool = new pg.Pool({ connectionString: getIntegrationDbUrl(), max: 2 });
     });
 
     afterAll(async () => {

@@ -17,6 +17,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -33,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import {
   formatINR,
@@ -437,6 +444,7 @@ export function PayBillForm() {
 }
 
 export function PayBillDialog() {
+  const isMobile = useIsMobile();
   const { payBillOpen, closePayBill } = useFinanceStore();
 
   const handleOpenChange = (open: boolean) => {
@@ -450,6 +458,22 @@ export function PayBillDialog() {
       }, 50);
     }
   };
+
+  if (isMobile) {
+    return (
+      <Sheet open={payBillOpen} onOpenChange={handleOpenChange}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+          <SheetHeader className="text-left pb-2">
+            <SheetTitle className="text-base font-bold flex items-center gap-2">
+              <CreditCardIcon className="size-4 text-primary" />
+              <span>Pay Credit Card Bill</span>
+            </SheetTitle>
+          </SheetHeader>
+          <PayBillForm />
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <Dialog open={payBillOpen} onOpenChange={handleOpenChange}>

@@ -6,38 +6,46 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useFinanceStore } from './finance-store';
 
+function getInitialTzState(userTz: string): { browserTz: string | null; dismissed: boolean } {
+  try {
+    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (detected && detected !== userTz) {
+        let isDismissed = false;
+        if (typeof sessionStorage !== 'undefined') {
+          try {
+            isDismissed = Boolean(sessionStorage.getItem(`tz-notice-dismissed-${detected}`));
+          } catch {}
+        }
+        return { browserTz: detected, dismissed: isDismissed };
+      }
+    }
+  } catch {}
+  return { browserTz: null, dismissed: true };
+}
+
 export function TimezoneNotice() {
   const { timezone, setTimezone } = useFinanceStore();
-  const [browserTz, setBrowserTz] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState(true);
+  const [tzState, setTzState] = useState(() => getInitialTzState(timezone));
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    try {
-      if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
-        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (detected) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setBrowserTz(detected);
-          const wasDismissed = sessionStorage.getItem(`tz-notice-dismissed-${detected}`);
-          if (!wasDismissed && detected !== timezone) {
-            setDismissed(false);
-          }
-        }
-      }
-    } catch {
-      // Ignore Intl errors
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTzState(getInitialTzState(timezone));
   }, [timezone]);
+
+  const { browserTz, dismissed } = tzState;
 
   if (dismissed || !browserTz || browserTz === timezone) {
     return null;
   }
 
   const handleDismiss = () => {
-    setDismissed(true);
+    setTzState((prev) => ({ ...prev, dismissed: true }));
     try {
-      sessionStorage.setItem(`tz-notice-dismissed-${browserTz}`, 'true');
+      if (browserTz && typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(`tz-notice-dismissed-${browserTz}`, 'true');
+      }
     } catch {
       // Ignore storage errors
     }

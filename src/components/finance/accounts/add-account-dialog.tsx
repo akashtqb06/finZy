@@ -3,11 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useFinanceStore } from '../shared/finance-store';
 import { RDFormFields } from './rd-form-fields';
 import type { RDCompounding, RDFirstInstallmentOn } from '@src/lib/finance/domain/rd';
@@ -260,6 +262,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                         <Input
                             id="opening-balance"
                             type="number"
+                            inputMode="decimal"
                             placeholder="0.00"
                             className="h-9 text-xs bg-card"
                             value={openingBalanceRupees}
@@ -307,6 +310,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="credit-limit"
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="150000"
                                 className="h-9 text-xs bg-card"
                                 value={creditLimitRupees}
@@ -320,6 +324,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="current-outstanding"
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="0"
                                 className="h-9 text-xs bg-card"
                                 value={currentOutstandingRupees}
@@ -336,6 +341,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="statement-day"
                                 type="number"
+                                inputMode="decimal"
                                 min="1"
                                 max="31"
                                 placeholder="21"
@@ -352,6 +358,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="due-days"
                                 type="number"
+                                inputMode="decimal"
                                 min="1"
                                 max="60"
                                 placeholder="20"
@@ -376,6 +383,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="fd-principal"
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="100000"
                                 className="h-9 text-xs bg-card"
                                 value={principalRupees}
@@ -389,6 +397,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="fd-rate"
                                 type="number"
+                                inputMode="decimal"
                                 step="0.05"
                                 placeholder="7.25"
                                 className="h-9 text-xs bg-card"
@@ -489,6 +498,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                         <Input
                             id="investment-value"
                             type="number"
+                            inputMode="decimal"
                             placeholder="100000"
                             className="h-9 text-xs bg-card"
                             value={initialValueRupees}
@@ -509,6 +519,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="loan-principal"
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="500000"
                                 className="h-9 text-xs bg-card"
                                 value={loanAmountRupees}
@@ -522,6 +533,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="loan-rate"
                                 type="number"
+                                inputMode="decimal"
                                 step="0.1"
                                 placeholder="8.5"
                                 className="h-9 text-xs bg-card"
@@ -536,6 +548,7 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
                             <Input
                                 id="loan-emi"
                                 type="number"
+                                inputMode="decimal"
                                 placeholder="12000"
                                 className="h-9 text-xs bg-card"
                                 value={emiRupees}
@@ -559,6 +572,8 @@ export function AddAccountForm({ onSuccess, onCancel }: { onSuccess?: () => void
 }
 
 export function AddAccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+    const isMobile = useIsMobile();
+
     const handleOpenChange = (nextOpen: boolean) => {
         onOpenChange(nextOpen);
         if (!nextOpen) {
@@ -578,6 +593,29 @@ export function AddAccountDialog({ open, onOpenChange }: { open: boolean; onOpen
         }
     };
 
+    const content = open ? (
+        <AddAccountForm
+            onSuccess={() => handleOpenChange(false)}
+            onCancel={() => handleOpenChange(false)}
+        />
+    ) : null;
+
+    if (isMobile) {
+        return (
+            <Sheet open={open} onOpenChange={handleOpenChange}>
+                <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto px-4 pb-6">
+                    <SheetHeader className="text-left pb-2">
+                        <SheetTitle className="text-base font-bold">Add Account</SheetTitle>
+                        <SheetDescription className="text-xs">
+                            Add a bank account, credit card, deposit, or investment portfolio.
+                        </SheetDescription>
+                    </SheetHeader>
+                    {content}
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-xl">
@@ -587,12 +625,7 @@ export function AddAccountDialog({ open, onOpenChange }: { open: boolean; onOpen
                         Add a bank account, credit card, deposit, or investment portfolio.
                     </DialogDescription>
                 </DialogHeader>
-                {open && (
-                    <AddAccountForm
-                        onSuccess={() => handleOpenChange(false)}
-                        onCancel={() => handleOpenChange(false)}
-                    />
-                )}
+                {content}
             </DialogContent>
         </Dialog>
     );

@@ -1,5 +1,25 @@
 import pg from 'pg';
+import fs from 'node:fs';
 import path from 'node:path';
+
+function loadEnvLocalIfAvailable(): void {
+    if (!process.env.DIRECT_URL && !process.env.DATABASE_URL) {
+        const envLocalPath = path.resolve(process.cwd(), '.env.local');
+        if (fs.existsSync(envLocalPath)) {
+            const content = fs.readFileSync(envLocalPath, 'utf-8');
+            for (const line of content.split('\n')) {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+                    const [key, ...rest] = trimmed.split('=');
+                    const val = rest.join('=').trim().replace(/^["']|["']$/g, '');
+                    if (key && !process.env[key.trim()]) {
+                        process.env[key.trim()] = val;
+                    }
+                }
+            }
+        }
+    }
+}
 
 function isLocalDatabaseUrl(connectionUrl: string): boolean {
     try {
@@ -37,6 +57,7 @@ function getSslConfig(connectionUrl: string): boolean | pg.ConnectionConfig['ssl
 }
 
 async function main() {
+    loadEnvLocalIfAvailable();
     const targetIndex = process.argv.indexOf('--target');
     const target = targetIndex !== -1 ? process.argv[targetIndex + 1] : undefined;
 

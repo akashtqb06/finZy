@@ -27,6 +27,7 @@ export class BadRequestError extends Error {
 }
 
 export class ConflictError extends Error {
+    readonly statusCode = 409;
     currentRecord?: unknown;
     constructor(message = 'Conflict', currentRecord?: unknown) {
         super(message);

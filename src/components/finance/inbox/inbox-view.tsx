@@ -607,6 +607,7 @@ export function InboxView() {
                             )}
                             <Input
                               type="number"
+                              inputMode="decimal"
                               step="0.01"
                               value={item.amountRupees}
                               onChange={(e) =>
