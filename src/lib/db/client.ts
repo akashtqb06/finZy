@@ -51,6 +51,16 @@ export function isLocalDatabaseUrl(connectionUrl: string): boolean {
     }
 }
 
+export function getCleanConnectionString(connectionUrl: string): string {
+    try {
+        const url = new URL(connectionUrl);
+        url.searchParams.delete('sslmode');
+        return url.toString();
+    } catch {
+        return connectionUrl;
+    }
+}
+
 export function getSslConfig(connectionUrl: string): boolean | pg.ConnectionConfig['ssl'] {
     if (isLocalDatabaseUrl(connectionUrl)) {
         return false;
@@ -95,8 +105,9 @@ function createDb(): AppDb {
 
     // Node-postgres Pool for serverless: max 2, idle timeout 30s, allowExitOnIdle
     const poolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : 2;
+    const cleanDbUrl = getCleanConnectionString(dbUrl);
     const pool = new pg.Pool({
-        connectionString: dbUrl,
+        connectionString: cleanDbUrl,
         max: poolMax,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,

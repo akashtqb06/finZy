@@ -7,7 +7,7 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
-import { getDb, getPgliteInstance, isPglite, isLocalDatabaseUrl, getSslConfig } from './client';
+import { getDb, getPgliteInstance, isPglite, isLocalDatabaseUrl, getSslConfig, getCleanConnectionString } from './client';
 import { assertTestIsolationGuard } from './guard';
 import * as schema from './schema';
 
@@ -150,7 +150,7 @@ export async function runMigrations(): Promise<void> {
         }
 
         const pool = new pg.Pool({
-            connectionString: directUrl,
+            connectionString: getCleanConnectionString(directUrl),
             max: 1,
             connectionTimeoutMillis: 10000,
             ssl: getSslConfig(directUrl),
