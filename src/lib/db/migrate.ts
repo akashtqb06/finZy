@@ -48,7 +48,10 @@ export async function runMigrations(): Promise<void> {
 
     assertTestIsolationGuard();
 
-    if (isPglite()) {
+    const targetIndex = process.argv.indexOf('--target');
+    const target = targetIndex !== -1 ? process.argv[targetIndex + 1] : undefined;
+
+    if (isPglite() && !target && !process.env.DIRECT_URL) {
         const activeDb = getDb();
         const pglite = getPgliteInstance();
         if (pglite) {
@@ -84,25 +87,38 @@ export async function runMigrations(): Promise<void> {
             `);
         }
     } else {
-        const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+        let directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
         if (!directUrl) {
-            throw new Error('DIRECT_URL (or DATABASE_URL) must be configured to run migrations.');
+            if (target === 'local') {
+                directUrl = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+            } else {
+                throw new Error('DIRECT_URL (or DATABASE_URL) must be configured to run migrations.');
+            }
         }
 
-        if (!isLocalDatabaseUrl(directUrl)) {
-            const parsed = new URL(directUrl);
-            const targetIndex = process.argv.indexOf('--target');
-            const isTargetLive = targetIndex !== -1 && process.argv[targetIndex + 1] === 'live';
-            if (!isTargetLive) {
+        const isLocal = isLocalDatabaseUrl(directUrl);
+        const parsed = new URL(directUrl);
+
+        if (target === 'live') {
+            if (isLocal) {
                 throw new Error(
-                    `Refusing to migrate remote host '${parsed.hostname}'. Migrating a remote database requires '--target live' and typed host confirmation.`
+                    `Target database host '${parsed.hostname}' is a local database, not a live remote database. Use '--target local'.`
                 );
             }
-
             const confirmed = await confirmRemoteHost(parsed.hostname);
             if (!confirmed) {
                 throw new Error(`Migration cancelled: confirmation did not match remote host '${parsed.hostname}'.`);
             }
+        } else if (target === 'local') {
+            if (!isLocal) {
+                throw new Error(
+                    `Refusing to migrate remote host '${parsed.hostname}' with '--target local'. Use '--target live' and typed host confirmation.`
+                );
+            }
+        } else if (!isLocal) {
+            throw new Error(
+                `Refusing to migrate remote host '${parsed.hostname}'. Migrating a remote database requires '--target live' and typed host confirmation.`
+            );
         }
 
         const pool = new pg.Pool({

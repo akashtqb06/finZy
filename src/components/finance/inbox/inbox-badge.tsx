@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 
-export function InboxCountBadge() {
+export function InboxCountBadge({ className }: { className?: string } = {}) {
   const [count, setCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -33,7 +34,12 @@ export function InboxCountBadge() {
   if (!count || count <= 0) return null;
 
   return (
-    <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-bold bg-amber-500 text-white leading-none shadow-xs">
+    <span
+      className={cn(
+        'inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[10px] font-bold bg-amber-500 text-white leading-none shadow-xs',
+        className
+      )}
+    >
       {count > 99 ? '99+' : count}
     </span>
   );

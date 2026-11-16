@@ -85,5 +85,62 @@ describe('DB Client & Migration Safety', () => {
                 /Migrations must NEVER run in the Vercel build/
             );
         });
+
+        it('refuses remote host when --target live is omitted', async () => {
+            const originalDirect = process.env.DIRECT_URL;
+            const originalArgv = [...process.argv];
+            try {
+                process.env.DIRECT_URL = 'postgres://user:pass@db.live.supabase.co:5432/postgres';
+                process.argv = ['node', 'migrate.ts'];
+                await expect(runMigrations()).rejects.toThrow(
+                    /Migrating a remote database requires '--target live'/
+                );
+            } finally {
+                if (originalDirect !== undefined) {
+                    process.env.DIRECT_URL = originalDirect;
+                } else {
+                    delete process.env.DIRECT_URL;
+                }
+                process.argv = originalArgv;
+            }
+        });
+
+        it('refuses local target if direct URL points to a remote host', async () => {
+            const originalDirect = process.env.DIRECT_URL;
+            const originalArgv = [...process.argv];
+            try {
+                process.env.DIRECT_URL = 'postgres://user:pass@db.live.supabase.co:5432/postgres';
+                process.argv = ['node', 'migrate.ts', '--target', 'local'];
+                await expect(runMigrations()).rejects.toThrow(
+                    /Refusing to migrate remote host .* with '--target local'/
+                );
+            } finally {
+                if (originalDirect !== undefined) {
+                    process.env.DIRECT_URL = originalDirect;
+                } else {
+                    delete process.env.DIRECT_URL;
+                }
+                process.argv = originalArgv;
+            }
+        });
+
+        it('refuses live target if direct URL points to a local host', async () => {
+            const originalDirect = process.env.DIRECT_URL;
+            const originalArgv = [...process.argv];
+            try {
+                process.env.DIRECT_URL = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+                process.argv = ['node', 'migrate.ts', '--target', 'live'];
+                await expect(runMigrations()).rejects.toThrow(
+                    /is a local database, not a live remote database/
+                );
+            } finally {
+                if (originalDirect !== undefined) {
+                    process.env.DIRECT_URL = originalDirect;
+                } else {
+                    delete process.env.DIRECT_URL;
+                }
+                process.argv = originalArgv;
+            }
+        });
     });
 });

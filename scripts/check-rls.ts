@@ -1,13 +1,59 @@
 import pg from 'pg';
 import path from 'node:path';
 
+function isLocalDatabaseUrl(connectionUrl: string): boolean {
+    try {
+        const url = new URL(connectionUrl);
+        const hostname = url.hostname.toLowerCase();
+        return (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname === '::1' ||
+            hostname === '[::1]' ||
+            hostname.endsWith('.local')
+        );
+    } catch {
+        return connectionUrl.includes('localhost') || connectionUrl.includes('127.0.0.1');
+    }
+}
+
+function getSslConfig(connectionUrl: string): boolean | pg.ConnectionConfig['ssl'] {
+    if (isLocalDatabaseUrl(connectionUrl)) {
+        return false;
+    }
+    try {
+        const url = new URL(connectionUrl);
+        const sslmode = url.searchParams.get('sslmode');
+        if (sslmode === 'disable') {
+            return false;
+        }
+        if (sslmode === 'verify-full') {
+            return { rejectUnauthorized: true };
+        }
+    } catch {
+        // Fallback
+    }
+    return { rejectUnauthorized: false };
+}
+
 async function main() {
-    const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    const targetIndex = process.argv.indexOf('--target');
+    const target = targetIndex !== -1 ? process.argv[targetIndex + 1] : undefined;
+
+    let directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+    if (!directUrl && target === 'local') {
+        directUrl = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+    }
+
     let tablesWithoutRls: string[] = [];
 
     if (directUrl) {
-        console.log(`Checking RLS status against database...`);
-        const client = new pg.Client({ connectionString: directUrl });
+        const parsed = new URL(directUrl);
+        console.log(`Checking RLS status against database at ${parsed.hostname}...`);
+        const client = new pg.Client({
+            connectionString: directUrl,
+            ssl: getSslConfig(directUrl),
+        });
         await client.connect();
         try {
             const res = await client.query<{ tablename: string; rowsecurity: boolean }>(`
