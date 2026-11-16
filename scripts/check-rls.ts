@@ -42,7 +42,7 @@ async function main() {
 
     let directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
     if (!directUrl && target === 'local') {
-        directUrl = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+        directUrl = 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
     }
 
     let tablesWithoutRls: string[] = [];

@@ -64,7 +64,10 @@ export async function runMigrations(): Promise<void> {
                     created_at timestamptz DEFAULT now()
                 );
                 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
-                    SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+                    SELECT COALESCE(
+                        NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+                        (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+                    )::uuid;
                 $$ LANGUAGE sql STABLE;
             `);
         }
@@ -90,7 +93,7 @@ export async function runMigrations(): Promise<void> {
         let directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
         if (!directUrl) {
             if (target === 'local') {
-                directUrl = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+                directUrl = 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
             } else {
                 throw new Error('DIRECT_URL (or DATABASE_URL) must be configured to run migrations.');
             }

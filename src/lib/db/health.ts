@@ -28,19 +28,19 @@ export type DatabaseHealthStatus =
       };
 
 export function getDatabaseConnectionInfo(): DatabaseConnectionInfo {
-    const rawUrl = process.env.DATABASE_URL || 'postgres://postgres:bi_password_123!@localhost:5432/bikit_dev';
+    const rawUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
     try {
         const parsed = new URL(rawUrl);
         return {
-            host: parsed.hostname || 'localhost',
-            port: parsed.port || '5432',
-            database: parsed.pathname.replace(/^\//, '') || 'bikit_dev',
+            host: parsed.hostname || '127.0.0.1',
+            port: parsed.port || '54422',
+            database: parsed.pathname.replace(/^\//, '') || 'postgres',
         };
     } catch {
         return {
-            host: 'localhost',
-            port: '5432',
-            database: 'bikit_dev',
+            host: '127.0.0.1',
+            port: '54422',
+            database: 'postgres',
         };
     }
 }

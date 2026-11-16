@@ -79,8 +79,8 @@ export function SecurityClient({ currentEmail }: { currentEmail: string }) {
             if (!error && data) {
                 setFactors(data.totp as FactorItem[]);
             }
-        } catch (_err: unknown) {
-            console.error('Failed to load factors:', _err);
+        } catch (err: unknown) {
+            console.error('Failed to load factors:', err);
         } finally {
             setIsLoadingFactors(false);
         }
@@ -89,16 +89,14 @@ export function SecurityClient({ currentEmail }: { currentEmail: string }) {
     useEffect(() => {
         let isMounted = true;
         void supabase.auth.mfa.listFactors().then(({ data, error }) => {
-            if (isMounted && !error && data) {
-                setFactors(data.totp as FactorItem[]);
-            }
-        }).catch((_err: unknown) => {
-            console.error('Failed to load factors:', _err);
-        }).finally(() => {
             if (isMounted) {
+                if (!error && data) {
+                    setFactors(data.totp as FactorItem[]);
+                }
                 setIsLoadingFactors(false);
             }
         });
+
         return () => {
             isMounted = false;
         };
@@ -652,3 +650,4 @@ export function SecurityClient({ currentEmail }: { currentEmail: string }) {
         </div>
     );
 }
+

@@ -90,7 +90,7 @@ function createDb(): AppDb {
         return drizzleDb;
     }
 
-    const dbUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+    const dbUrl = process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
     assertTestIsolationGuard(dbUrl);
 
     // Node-postgres Pool for serverless: max 2, idle timeout 30s, allowExitOnIdle

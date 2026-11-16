@@ -128,7 +128,7 @@ describe('DB Client & Migration Safety', () => {
             const originalDirect = process.env.DIRECT_URL;
             const originalArgv = [...process.argv];
             try {
-                process.env.DIRECT_URL = 'postgres://postgres:postgres@127.0.0.1:54322/postgres';
+                process.env.DIRECT_URL = 'postgres://postgres:postgres@127.0.0.1:54422/postgres';
                 process.argv = ['node', 'migrate.ts', '--target', 'live'];
                 await expect(runMigrations()).rejects.toThrow(
                     /is a local database, not a live remote database/

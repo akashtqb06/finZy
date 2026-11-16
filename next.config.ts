@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
-let supabaseWs = 'ws://127.0.0.1:54321 wss://*.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54421';
+let supabaseWs = 'ws://127.0.0.1:54421 wss://*.supabase.co';
 try {
   const parsed = new URL(supabaseUrl);
   const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
