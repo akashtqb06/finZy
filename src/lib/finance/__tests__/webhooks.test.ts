@@ -26,6 +26,7 @@ describe('Webhooks & Outbound Dispatcher', () => {
     await db.delete(webhookDeliveries);
     await db.delete(webhookEndpoints).where(inArray(webhookEndpoints.userId, [userA, userB]));
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('SSRF guard blocks private, loopback, and link-local URLs while permitting public and allowlisted hosts', () => {

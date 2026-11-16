@@ -76,7 +76,7 @@ export async function runMigrations(): Promise<void> {
     const targetIndex = process.argv.indexOf('--target');
     const target = targetIndex !== -1 ? process.argv[targetIndex + 1] : undefined;
 
-    if (isPglite() && !target) {
+    if (isPglite() && !target && !process.env.DIRECT_URL) {
         const activeDb = getDb();
         const pglite = getPgliteInstance();
         if (pglite) {
