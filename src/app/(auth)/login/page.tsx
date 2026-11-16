@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 
 type LoginPageProps = {
-    searchParams: Promise<{ next?: string | string[] }>;
+    searchParams: Promise<{ next?: string | string[]; error?: string | string[] }>;
 };
 
 async function LoginPageContent({ searchParams }: LoginPageProps) {
@@ -15,8 +15,9 @@ async function LoginPageContent({ searchParams }: LoginPageProps) {
         redirect('/');
     }
     const next = typeof params.next === 'string' ? params.next : '/';
+    const error = typeof params.error === 'string' ? params.error : undefined;
 
-    return <LoginForm next={next} />;
+    return <LoginForm next={next} initialError={error} />;
 }
 
 function LoginFormSkeleton() {

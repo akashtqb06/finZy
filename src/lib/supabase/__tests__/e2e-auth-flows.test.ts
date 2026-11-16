@@ -69,6 +69,49 @@ describe('Supabase Auth lifecycle & flows (e2e)', () => {
         );
     });
 
+    it('passwordless magic link flow: triggers signInWithOtp', async () => {
+        const mockAuth = {
+            signInWithOtp: vi.fn().mockResolvedValue({
+                data: {},
+                error: null,
+            }),
+        };
+
+        const client = { auth: mockAuth };
+        const res = await client.auth.signInWithOtp({
+            email: 'user@finzy.local',
+            options: {
+                emailRedirectTo: 'http://localhost:3000/auth/confirm?next=/',
+            },
+        });
+        expect(res.error).toBeNull();
+        expect(mockAuth.signInWithOtp).toHaveBeenCalledWith({
+            email: 'user@finzy.local',
+            options: {
+                emailRedirectTo: 'http://localhost:3000/auth/confirm?next=/',
+            },
+        });
+    });
+
+    it('reset password flow: updateUser updates password for authenticated recovery session', async () => {
+        const mockAuth = {
+            updateUser: vi.fn().mockResolvedValue({
+                data: { user: { id: 'u-123' } },
+                error: null,
+            }),
+        };
+
+        const client = { auth: mockAuth };
+        const res = await client.auth.updateUser({
+            password: 'new-secure-password',
+        });
+        expect(res.error).toBeNull();
+        expect(res.data?.user?.id).toBe('u-123');
+        expect(mockAuth.updateUser).toHaveBeenCalledWith({
+            password: 'new-secure-password',
+        });
+    });
+
     it('MFA enroll, challenge, and verify flow', async () => {
         const mockMfa = {
             enroll: vi.fn().mockResolvedValue({
