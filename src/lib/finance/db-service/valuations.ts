@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { db, finAccounts, finTransactions, finValuations } from '@src/lib/db';
 import { NotFoundError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import {
   calculateFDAccruedValue,
   normalizeInterestRate,
@@ -89,26 +90,31 @@ export async function createValuation(
   }
 
   // Upsert manual valuation per account and date
-  const [row] = await db
-    .insert(finValuations)
-    .values({
-      userId,
-      accountId: validated.accountId,
-      date: validated.date,
-      value: validated.value,
-      costBasis: validated.costBasis ?? null,
-      note: validated.note ?? null,
-    })
-    .onConflictDoUpdate({
-      target: [finValuations.accountId, finValuations.date],
-      set: {
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finValuations)
+      .values({
+        userId,
+        accountId: validated.accountId,
+        date: validated.date,
         value: validated.value,
         costBasis: validated.costBasis ?? null,
         note: validated.note ?? null,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: [finValuations.accountId, finValuations.date],
+        set: {
+          value: validated.value,
+          costBasis: validated.costBasis ?? null,
+          note: validated.note ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   return mapValuationToDTO(row);
 }

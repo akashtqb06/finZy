@@ -93,6 +93,7 @@ export const finAccounts = pgTable(
     currency: text('currency').notNull().default('INR'),
     creditLimit: bigint('credit_limit', { mode: 'number' }),
     isActive: boolean('is_active').notNull().default(true),
+    version: integer('version').notNull().default(1),
     metadata: jsonb('metadata')
       .notNull()
       .$type<Record<string, unknown>>()
@@ -129,6 +130,7 @@ export const finCategories = pgTable(
     icon: text('icon'),
     color: text('color'),
     isSystem: boolean('is_system').notNull().default(false),
+    version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .notNull()
       .defaultNow(),
@@ -173,6 +175,7 @@ export const finTransactions = pgTable(
     isRecurring: boolean('is_recurring').notNull().default(false),
     recurringRuleId: text('recurring_rule_id'),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
+    version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .notNull()
       .defaultNow(),
@@ -257,6 +260,7 @@ export const finBudgets = pgTable(
       .default('monthly'),
     startDate: date('start_date', { mode: 'string' }).notNull(),
     endDate: date('end_date', { mode: 'string' }),
+    version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
       .notNull()
       .defaultNow(),
@@ -299,6 +303,7 @@ export const finRecurringRules = pgTable(
     interval: integer('interval').notNull().default(1),
     startDate: date('start_date', { mode: 'string' }).notNull(),
     endDate: date('end_date', { mode: 'string' }),
+    version: integer('version').notNull().default(1),
     nextOccurrence: date('next_occurrence', { mode: 'string' }).notNull(),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })

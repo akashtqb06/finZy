@@ -1,6 +1,7 @@
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { db, finAccounts, finCategories, finRecurringRules, finTransactions } from '@src/lib/db';
-import { BadRequestError, NotFoundError } from '@src/app/api/utils';
+import { BadRequestError, NotFoundError, ConflictError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import type { RecurringFrequency } from '../constants';
 import {
   type CreateRecurringRuleDTO,
@@ -27,6 +28,7 @@ export function mapRecurringRuleToDTO(row: typeof finRecurringRules.$inferSelect
     endDate: row.endDate,
     nextOccurrence: row.nextOccurrence,
     isActive: row.isActive,
+    version: row.version ?? 1,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
@@ -139,25 +141,31 @@ export async function createRecurringRule(
 
   const nextOccurrence = validated.nextOccurrence || validated.startDate;
 
-  const [row] = await db
-    .insert(finRecurringRules)
-    .values({
-      userId,
-      accountId: validated.accountId,
-      toAccountId: validated.toAccountId || null,
-      categoryId: validated.categoryId || null,
-      type: validated.type,
-      amount: validated.amount,
-      payee: validated.payee || null,
-      note: validated.note || null,
-      frequency: validated.frequency,
-      interval: validated.interval,
-      startDate: validated.startDate,
-      endDate: validated.endDate || null,
-      nextOccurrence,
-      isActive: true,
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finRecurringRules)
+      .values({
+        userId,
+        accountId: validated.accountId,
+        toAccountId: validated.toAccountId || null,
+        categoryId: validated.categoryId || null,
+        type: validated.type,
+        amount: validated.amount,
+        payee: validated.payee || null,
+        note: validated.note || null,
+        frequency: validated.frequency,
+        interval: validated.interval,
+        startDate: validated.startDate,
+        endDate: validated.endDate || null,
+        nextOccurrence,
+        isActive: true,
+        version: 1,
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   return mapRecurringRuleToDTO(row);
 }
@@ -168,10 +176,16 @@ export async function updateRecurringRule(
   data: UpdateRecurringRuleDTO
 ): Promise<RecurringRuleDTO> {
   const validated = updateRecurringRuleSchema.parse(data);
-  await getRecurringRule(userId, ruleId);
+  const existing = await getRecurringRule(userId, ruleId);
+
+  // Concurrency check
+  if (validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
 
   const updateValues: Partial<typeof finRecurringRules.$inferInsert> = {
     updatedAt: new Date(),
+    version: (existing.version ?? 1) + 1,
   };
 
   if (validated.accountId !== undefined) updateValues.accountId = validated.accountId;
@@ -187,28 +201,46 @@ export async function updateRecurringRule(
   if (validated.nextOccurrence !== undefined) updateValues.nextOccurrence = validated.nextOccurrence;
   if (validated.isActive !== undefined) updateValues.isActive = validated.isActive;
 
-  const [updated] = await db
-    .update(finRecurringRules)
-    .set(updateValues)
-    .where(and(eq(finRecurringRules.id, ruleId), eq(finRecurringRules.userId, userId)))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(finRecurringRules)
+      .set(updateValues)
+      .where(and(eq(finRecurringRules.id, ruleId), eq(finRecurringRules.userId, userId)))
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return row;
+  });
 
   return mapRecurringRuleToDTO(updated);
 }
 
-export async function deleteRecurringRule(userId: string, ruleId: string): Promise<void> {
-  await getRecurringRule(userId, ruleId);
+export async function deleteRecurringRule(
+  userId: string,
+  ruleId: string,
+  expectedVersion?: number
+): Promise<void> {
+  const existing = await getRecurringRule(userId, ruleId);
 
-  // Null out recurringRuleId on generated transactions so they are preserved
-  // but no longer reference the deleted rule (task spec: keep transactions with ruleId=null).
-  await db
-    .update(finTransactions)
-    .set({ recurringRuleId: null })
-    .where(and(eq(finTransactions.userId, userId), eq(finTransactions.recurringRuleId, ruleId)));
+  // Concurrency check
+  if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
 
-  await db
-    .delete(finRecurringRules)
-    .where(and(eq(finRecurringRules.id, ruleId), eq(finRecurringRules.userId, userId)));
+  await db.transaction(async (tx) => {
+    // Null out recurringRuleId on generated transactions so they are preserved
+    // but no longer reference the deleted rule (task spec: keep transactions with ruleId=null).
+    await tx
+      .update(finTransactions)
+      .set({ recurringRuleId: null })
+      .where(and(eq(finTransactions.userId, userId), eq(finTransactions.recurringRuleId, ruleId)));
+
+    await tx
+      .delete(finRecurringRules)
+      .where(and(eq(finRecurringRules.id, ruleId), eq(finRecurringRules.userId, userId)));
+
+    await incrementDataVersion(tx, userId);
+  });
 }
 
 /**

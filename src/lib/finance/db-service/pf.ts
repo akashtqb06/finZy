@@ -1,6 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { db, finAccounts, finPfEntries, finUserSettings, finValuations } from '@src/lib/db';
 import { NotFoundError, BadRequestError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import {
   type PfEntryDTO,
   type CommitPfPassbookResultDTO,
@@ -368,6 +369,8 @@ export async function commitPfPassbook(
         updatedAt: new Date(),
       })
       .where(eq(finAccounts.id, accountId));
+
+    await incrementDataVersion(tx, userId);
 
     return {
       added,

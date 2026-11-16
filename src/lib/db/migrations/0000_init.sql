@@ -7,6 +7,7 @@ CREATE TABLE "fin_accounts" (
 	"currency" text DEFAULT 'INR' NOT NULL,
 	"credit_limit" bigint,
 	"is_active" boolean DEFAULT true NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"metadata" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -20,6 +21,7 @@ CREATE TABLE "fin_budgets" (
 	"period" text DEFAULT 'monthly' NOT NULL,
 	"start_date" date NOT NULL,
 	"end_date" date,
+	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -33,6 +35,7 @@ CREATE TABLE "fin_categories" (
 	"icon" text,
 	"color" text,
 	"is_system" boolean DEFAULT false NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -109,6 +112,7 @@ CREATE TABLE "fin_recurring_rules" (
 	"interval" integer DEFAULT 1 NOT NULL,
 	"start_date" date NOT NULL,
 	"end_date" date,
+	"version" integer DEFAULT 1 NOT NULL,
 	"next_occurrence" date NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -133,6 +137,7 @@ CREATE TABLE "fin_transactions" (
 	"is_recurring" boolean DEFAULT false NOT NULL,
 	"recurring_rule_id" text,
 	"deleted_at" timestamp with time zone,
+	"version" integer DEFAULT 1 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "fin_transactions_amount_check" CHECK ("fin_transactions"."type" = 'adjustment' OR "fin_transactions"."amount" > 0),

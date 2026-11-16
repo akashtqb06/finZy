@@ -1,5 +1,5 @@
 import { and, eq, lte, or } from 'drizzle-orm';
-import { db, finRecurringRules, finTransactions } from '@src/lib/db';
+import { db, finRecurringRules, finTransactions, finUserSettings } from '@src/lib/db';
 import { getFinanceService, type FinanceService } from '../service';
 import type { RecurringRuleDTO, TransactionDTO } from '../contract';
 import {
@@ -39,7 +39,21 @@ export async function catchUpRecurringRulesIfDue(
   }
   lastCatchUpByUser.set(userId, now);
   try {
-    const today = todayInTz(process.env.APP_TIMEZONE || DEFAULT_TZ);
+    let tz = process.env.APP_TIMEZONE || DEFAULT_TZ;
+    try {
+      const [settings] = await db
+        .select({ timezone: finUserSettings.timezone })
+        .from(finUserSettings)
+        .where(eq(finUserSettings.userId, userId))
+        .limit(1);
+      if (settings?.timezone) {
+        tz = settings.timezone;
+      }
+    } catch {
+      // Fallback to default timezone if settings table not accessible
+    }
+
+    const today = todayInTz(tz);
     await generateDueRecurringTransactions({
       userId,
       asOfDate: today,
@@ -57,8 +71,25 @@ export async function catchUpRecurringRulesIfDue(
 export async function generateDueRecurringTransactions(
   options: GenerateOptions = {}
 ): Promise<GenerationResult> {
-  const asOfDate =
-    options.asOfDate || todayInTz(process.env.APP_TIMEZONE || DEFAULT_TZ);
+  let asOfDate = options.asOfDate;
+  if (!asOfDate) {
+    let tz = process.env.APP_TIMEZONE || DEFAULT_TZ;
+    if (options.userId) {
+      try {
+        const [settings] = await db
+          .select({ timezone: finUserSettings.timezone })
+          .from(finUserSettings)
+          .where(eq(finUserSettings.userId, options.userId))
+          .limit(1);
+        if (settings?.timezone) {
+          tz = settings.timezone;
+        }
+      } catch {
+        // Fallback to default
+      }
+    }
+    asOfDate = todayInTz(tz);
+  }
   const backend = options.backend || process.env.FINANCE_BACKEND || 'db';
 
   if (backend === 'mock') {

@@ -42,7 +42,7 @@ export interface FinanceService {
     accountId: string,
     data: UpdateAccountDTO
   ): Promise<AccountDTO>;
-  deleteAccount(userId: string, accountId: string): Promise<void>;
+  deleteAccount(userId: string, accountId: string, expectedVersion?: number): Promise<void>;
 
   // Categories
   listCategories(userId: string, filters?: CategoryFilters): Promise<CategoryDTO[]>;
@@ -53,7 +53,7 @@ export interface FinanceService {
     categoryId: string,
     data: UpdateCategoryDTO
   ): Promise<CategoryDTO>;
-  deleteCategory(userId: string, categoryId: string): Promise<void>;
+  deleteCategory(userId: string, categoryId: string, expectedVersion?: number): Promise<void>;
 
   // Transactions
   listTransactions(
@@ -71,7 +71,7 @@ export interface FinanceService {
     transactionId: string,
     data: UpdateTransactionDTO
   ): Promise<TransactionDTO>;
-  deleteTransaction(userId: string, transactionId: string): Promise<void>;
+  deleteTransaction(userId: string, transactionId: string, expectedVersion?: number): Promise<void>;
 
   // Valuations
   listValuations(userId: string, filters: ValuationFilters): Promise<ValuationDTO[]>;
@@ -89,7 +89,7 @@ export interface FinanceService {
     budgetId: string,
     data: UpdateBudgetDTO
   ): Promise<BudgetDTO>;
-  deleteBudget(userId: string, budgetId: string): Promise<void>;
+  deleteBudget(userId: string, budgetId: string, expectedVersion?: number): Promise<void>;
 
   // Recurring Rules
   listRecurringRules(userId: string): Promise<RecurringRuleDTO[]>;
@@ -103,7 +103,7 @@ export interface FinanceService {
     ruleId: string,
     data: UpdateRecurringRuleDTO
   ): Promise<RecurringRuleDTO>;
-  deleteRecurringRule(userId: string, ruleId: string): Promise<void>;
+  deleteRecurringRule(userId: string, ruleId: string, expectedVersion?: number): Promise<void>;
 
   // Stats / Dashboard
   getOverviewStats(

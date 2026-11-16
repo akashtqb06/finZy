@@ -32,10 +32,10 @@ export const registerSchema = z
 export const safeUserSchema = z.object({
     id: z.string(),
     email: z.string(),
-    name: z.string().default('User'),
-    role: z.string().default('member'),
+    name: z.string().optional(),
+    role: z.string().optional(),
     avatarUrl: z.string().nullable().optional(),
-    createdAt: z.coerce.date().default(() => new Date()),
+    createdAt: z.coerce.date().optional(),
     lastLoginAt: z.coerce.date().nullable().optional(),
 });
 

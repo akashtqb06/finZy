@@ -7,6 +7,7 @@ import { AppHeader } from '@src/components/layout/app-header';
 import { BottomNav } from '@src/components/layout/bottom-nav';
 import { UserProvider } from '@src/components/auth/user-provider';
 import { AppSettingsProvider } from '@src/components/settings/app-settings-provider';
+import { FinanceSyncProvider } from '@src/components/finance/shared/finance-sync-provider';
 import { getPublicSettings } from '@src/lib/settings/app-settings';
 import { requireUser } from '@src/lib/auth/dal';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -85,14 +86,16 @@ async function AuthenticatedShell({ children }: { children: React.ReactNode }) {
     return (
         <UserProvider user={user}>
             <AppSettingsProvider initialAppName={appName}>
-                <SidebarProvider defaultOpen={defaultOpen}>
-                    <AppSidebar />
-                    <SidebarInset className="flex flex-col min-h-0 min-w-0 h-dvh overflow-hidden">
-                        <AppHeader />
-                        <main className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
-                        <BottomNav />
-                    </SidebarInset>
-                </SidebarProvider>
+                <FinanceSyncProvider userId={user.id}>
+                    <SidebarProvider defaultOpen={defaultOpen}>
+                        <AppSidebar />
+                        <SidebarInset className="flex flex-col min-h-0 min-w-0 h-dvh overflow-hidden">
+                            <AppHeader />
+                            <main className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
+                            <BottomNav />
+                        </SidebarInset>
+                    </SidebarProvider>
+                </FinanceSyncProvider>
             </AppSettingsProvider>
         </UserProvider>
     );

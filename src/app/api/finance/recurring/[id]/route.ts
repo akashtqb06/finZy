@@ -52,15 +52,21 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+export const PATCH = PUT;
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const user = await requireUserApi();
     const gated = checkFeatureGatedApi('recurring');
     if (gated) return gated;
 
     const { id } = await context.params;
+    const url = new URL(request.url);
+    const expectedVersionParam = url.searchParams.get('expectedVersion');
+    const expectedVersion = expectedVersionParam ? parseInt(expectedVersionParam, 10) : undefined;
+
     const service = getFinanceService();
-    await service.deleteRecurringRule(user.id, id);
+    await service.deleteRecurringRule(user.id, id, expectedVersion);
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err);

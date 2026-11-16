@@ -46,9 +46,12 @@ export function QuickAddForm({
     categories,
     transactions,
     lastUsedAccountId,
+    timezone,
     addTransaction,
     openPayBill,
   } = useFinanceStore();
+
+  const userTz = timezone || DEFAULT_TZ;
 
   // Form states
   const [type, setType] = useState<TransactionType>('expense');
@@ -60,7 +63,7 @@ export function QuickAddForm({
   const [payee, setPayee] = useState('');
   const [note, setNote] = useState('');
   const [dateSelection, setDateSelection] = useState<'today' | 'yesterday' | 'custom'>('today');
-  const [customDate, setCustomDate] = useState(() => todayInTz(DEFAULT_TZ));
+  const [customDate, setCustomDate] = useState(() => todayInTz(userTz));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -74,9 +77,9 @@ export function QuickAddForm({
     return firstAsset?.id || accounts[0]?.id || '';
   }, [accounts, lastUsedAccountId]);
 
-  // Today and Yesterday date strings in user timezone (Asia/Kolkata)
-  const todayStr = useMemo(() => todayInTz(DEFAULT_TZ), []);
-  const yesterdayStr = useMemo(() => yesterdayInTz(DEFAULT_TZ), []);
+  // Today and Yesterday date strings in user configured timezone
+  const todayStr = useMemo(() => todayInTz(userTz), [userTz]);
+  const yesterdayStr = useMemo(() => yesterdayInTz(userTz), [userTz]);
 
   const activeDate = useMemo(() => {
     if (dateSelection === 'today') return todayStr;

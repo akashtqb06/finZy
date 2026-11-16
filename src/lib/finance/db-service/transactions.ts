@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db, finAccounts, finCategories, finTransactions } from '@src/lib/db';
-import { BadRequestError, NotFoundError } from '@src/app/api/utils';
+import { BadRequestError, NotFoundError, ConflictError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import { getAccount } from './accounts';
 import {
   type CreateTransactionDTO,
@@ -39,6 +40,7 @@ export function mapTransactionToDTO(
     isRecurring: row.isRecurring,
     recurringRuleId: row.recurringRuleId,
     deletedAt: row.deletedAt instanceof Date ? row.deletedAt.toISOString() : (row.deletedAt ? String(row.deletedAt) : null),
+    version: row.version ?? 1,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
     effect: extra?.effect,
@@ -177,25 +179,31 @@ export async function createTransaction(
 
   const signedAmount = computeSignedAmount(validated.type, validated.amount);
 
-  const [row] = await db
-    .insert(finTransactions)
-    .values({
-      userId,
-      accountId: validated.accountId,
-      toAccountId: validated.type === 'transfer' ? validated.toAccountId : null,
-      categoryId: validated.categoryId || null,
-      date: validated.date,
-      type: validated.type,
-      amount: validated.amount,
-      signedAmount,
-      payee: validated.payee || null,
-      note: validated.note || null,
-      tags: validated.tags || null,
-      clientRequestId: clientReqId || null,
-      isRecurring: validated.isRecurring || false,
-      recurringRuleId: validated.recurringRuleId || null,
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finTransactions)
+      .values({
+        userId,
+        accountId: validated.accountId,
+        toAccountId: validated.type === 'transfer' ? validated.toAccountId : null,
+        categoryId: validated.categoryId || null,
+        date: validated.date,
+        type: validated.type,
+        amount: validated.amount,
+        signedAmount,
+        payee: validated.payee || null,
+        note: validated.note || null,
+        tags: validated.tags || null,
+        clientRequestId: clientReqId || null,
+        isRecurring: validated.isRecurring || false,
+        recurringRuleId: validated.recurringRuleId || null,
+        version: 1,
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   return mapTransactionToDTO(row);
 }
@@ -271,8 +279,14 @@ export async function updateTransaction(
 
   const signedAmount = computeSignedAmount(effectiveType, effectiveAmount);
 
+  // Concurrency check
+  if (validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
+
   const updateValues: Partial<typeof finTransactions.$inferInsert> = {
     updatedAt: new Date(),
+    version: (existing.version ?? 1) + 1,
   };
 
   if (validated.accountId !== undefined) updateValues.accountId = validated.accountId;
@@ -290,29 +304,51 @@ export async function updateTransaction(
   if (validated.note !== undefined) updateValues.note = validated.note;
   if (validated.tags !== undefined) updateValues.tags = validated.tags;
 
-  const [updated] = await db
-    .update(finTransactions)
-    .set(updateValues)
-    .where(
-      and(
-        eq(finTransactions.id, transactionId),
-        eq(finTransactions.userId, userId),
-        isNull(finTransactions.deletedAt)
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(finTransactions)
+      .set(updateValues)
+      .where(
+        and(
+          eq(finTransactions.id, transactionId),
+          eq(finTransactions.userId, userId),
+          isNull(finTransactions.deletedAt)
+        )
       )
-    )
-    .returning();
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return row;
+  });
 
   return mapTransactionToDTO(updated);
 }
 
-export async function deleteTransaction(userId: string, transactionId: string): Promise<void> {
+export async function deleteTransaction(
+  userId: string,
+  transactionId: string,
+  expectedVersion?: number
+): Promise<void> {
   // Ensure transaction exists and belongs to user
-  await getTransaction(userId, transactionId);
+  const existing = await getTransaction(userId, transactionId);
 
-  await db
-    .update(finTransactions)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(finTransactions.id, transactionId), eq(finTransactions.userId, userId)));
+  // Concurrency check
+  if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(finTransactions)
+      .set({
+        deletedAt: new Date(),
+        updatedAt: new Date(),
+        version: (existing.version ?? 1) + 1,
+      })
+      .where(and(eq(finTransactions.id, transactionId), eq(finTransactions.userId, userId)));
+
+    await incrementDataVersion(tx, userId);
+  });
 }
 
 export async function bulkDeleteTransactions(userId: string, transactionIds: string[]): Promise<number> {

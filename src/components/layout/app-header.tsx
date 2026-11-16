@@ -17,6 +17,7 @@ import { useBreadcrumbStore } from "./breadcrumb-store";
 import { ThemeToggle } from "./theme-toggle";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { QuickAddSlot } from "@src/components/finance/quick-add/quick-add-slot";
+import { SyncStatusIndicator } from "@src/components/finance/shared/sync-status-indicator";
 import { useFinanceStore } from "@src/components/finance/shared/finance-store";
 
 function pathToBreadcrumbs(
@@ -113,7 +114,8 @@ export function AppHeader() {
         </Breadcrumb>
       </div>
 
-      <div className="flex items-center gap-1.5 ml-4 shrink-0">
+      <div className="flex items-center gap-2 ml-4 shrink-0">
+        <SyncStatusIndicator />
         <QuickAddSlot />
         <KeyboardShortcutsDialog />
         <ThemeToggle />

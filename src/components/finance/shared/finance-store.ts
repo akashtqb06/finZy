@@ -75,6 +75,9 @@ export interface FinanceState {
   payBillOpen: boolean;
   payBillCardId: string | null;
 
+  timezone: string;
+  setTimezone: (tz: string) => void;
+
   // Actions
   initialize: (userId?: string) => Promise<void>;
   reset: () => void;
@@ -105,8 +108,11 @@ export interface FinanceState {
     data: CreateTransactionDTO,
     clientRequestId?: string
   ) => Promise<{ transaction: TransactionDTO; undo: () => Promise<void> }>;
-  updateTransaction: (id: string, data: UpdateTransactionDTO) => Promise<TransactionDTO>;
-  deleteTransaction: (id: string) => Promise<void>;
+  updateTransaction: (
+    id: string,
+    data: UpdateTransactionDTO & { expectedVersion?: number }
+  ) => Promise<TransactionDTO>;
+  deleteTransaction: (id: string, expectedVersion?: number) => Promise<void>;
   bulkDeleteTransactions: (ids: string[]) => Promise<void>;
   bulkUpdateTransactions: (
     ids: string[],
@@ -121,18 +127,27 @@ export interface FinanceState {
       dueDay?: number;
     }
   ) => Promise<AccountWithBalance>;
-  updateAccount: (id: string, data: UpdateAccountDTO) => Promise<AccountWithBalance>;
-  deleteAccount: (id: string) => Promise<void>;
+  updateAccount: (
+    id: string,
+    data: UpdateAccountDTO & { expectedVersion?: number }
+  ) => Promise<AccountWithBalance>;
+  deleteAccount: (id: string, expectedVersion?: number) => Promise<void>;
 
   addValuation: (data: CreateValuationDTO) => Promise<ValuationDTO>;
 
   addCategory: (data: CreateCategoryDTO) => Promise<CategoryDTO>;
-  updateCategory: (id: string, data: UpdateCategoryDTO) => Promise<CategoryDTO>;
-  deleteCategory: (id: string) => Promise<void>;
+  updateCategory: (
+    id: string,
+    data: UpdateCategoryDTO & { expectedVersion?: number }
+  ) => Promise<CategoryDTO>;
+  deleteCategory: (id: string, expectedVersion?: number) => Promise<void>;
 
   addBudget: (data: CreateBudgetDTO) => Promise<BudgetDTO>;
-  updateBudget: (id: string, data: UpdateBudgetDTO) => Promise<BudgetDTO>;
-  deleteBudget: (id: string) => Promise<void>;
+  updateBudget: (
+    id: string,
+    data: UpdateBudgetDTO & { expectedVersion?: number }
+  ) => Promise<BudgetDTO>;
+  deleteBudget: (id: string, expectedVersion?: number) => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get, api) => {
@@ -166,8 +181,11 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     lastUsedAccountId: '',
     payBillOpen: false,
     payBillCardId: null,
+    timezone: 'Asia/Kolkata',
 
-  reset: () => {
+    setTimezone: (tz: string) => set({ timezone: tz }),
+
+    reset: () => {
     set({
       userId: null,
       isInitialized: false,
@@ -469,6 +487,17 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
       get().refreshOverviewStats(),
       get().refreshNetWorthHistory(),
       get().refreshBudgets(),
+      fetch('/api/finance/settings', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((settings) => {
+          if (settings?.timezone) {
+            set({ timezone: settings.timezone });
+          }
+        })
+        .catch(() => {}),
     ]);
 
     set({ isInitialized: true });
@@ -635,6 +664,13 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||
@@ -684,7 +720,7 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     return updatedTx;
   },
 
-  deleteTransaction: async (id) => {
+  deleteTransaction: async (id, expectedVersion) => {
     const existing =
       get().transactions.find((t) => t.id === id) ||
       Object.values(get().transactionsByAccount)
@@ -698,9 +734,20 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
       if (key !== 'all') deleteAffected.add(key);
     }
 
-    const res = await fetch(`/api/finance/transactions/${id}`, { method: 'DELETE' });
+    const deleteUrl =
+      expectedVersion !== undefined
+        ? `/api/finance/transactions/${id}?expectedVersion=${expectedVersion}`
+        : `/api/finance/transactions/${id}`;
+    const res = await fetch(deleteUrl, { method: 'DELETE' });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||
@@ -828,7 +875,7 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     return body.budget;
   },
 
-  updateBudget: async (id: string, data: UpdateBudgetDTO) => {
+  updateBudget: async (id: string, data: UpdateBudgetDTO & { expectedVersion?: number }) => {
     const res = await fetch(`/api/finance/budgets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -836,6 +883,13 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message || errBody?.error || `Failed to update budget (${res.status})`
       );
@@ -845,10 +899,21 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     return body.budget;
   },
 
-  deleteBudget: async (id: string) => {
-    const res = await fetch(`/api/finance/budgets/${id}`, { method: 'DELETE' });
+  deleteBudget: async (id: string, expectedVersion?: number) => {
+    const url =
+      expectedVersion !== undefined
+        ? `/api/finance/budgets/${id}?expectedVersion=${expectedVersion}`
+        : `/api/finance/budgets/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message || errBody?.error || `Failed to delete budget (${res.status})`
       );
@@ -925,6 +990,13 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||
@@ -946,10 +1018,21 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     );
   },
 
-  deleteAccount: async (id) => {
-    const res = await fetch(`/api/finance/accounts/${id}`, { method: 'DELETE' });
+  deleteAccount: async (id, expectedVersion) => {
+    const url =
+      expectedVersion !== undefined
+        ? `/api/finance/accounts/${id}?expectedVersion=${expectedVersion}`
+        : `/api/finance/accounts/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||
@@ -1016,6 +1099,13 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
 
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||
@@ -1028,10 +1118,21 @@ export const useFinanceStore = create<FinanceState>((set, get, api) => {
     return category;
   },
 
-  deleteCategory: async (id) => {
-    const res = await fetch(`/api/finance/categories/${id}`, { method: 'DELETE' });
+  deleteCategory: async (id, expectedVersion) => {
+    const url =
+      expectedVersion !== undefined
+        ? `/api/finance/categories/${id}?expectedVersion=${expectedVersion}`
+        : `/api/finance/categories/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) {
       const errBody = await res.json().catch(() => null);
+      if (res.status === 409) {
+        const conflictErr = new Error(errBody?.message || 'Changed on another device');
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).status = 409;
+        (conflictErr as unknown as { status: number; currentRecord: unknown }).currentRecord =
+          errBody?.currentRecord;
+        throw conflictErr;
+      }
       throw new Error(
         errBody?.error?.message ||
           errBody?.error ||

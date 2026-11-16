@@ -58,7 +58,16 @@ export function handleApiError(err: unknown): NextResponse {
         return apiError('Not found', 404);
     }
     if (err instanceof ConflictError) {
-        return apiError(err.message, 409);
+        const res = NextResponse.json(
+            {
+                error: 'Conflict',
+                message: err.message,
+                currentRecord: err.currentRecord,
+            },
+            { status: 409 }
+        );
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        return res;
     }
 
     console.error('Unhandled API error:', err);

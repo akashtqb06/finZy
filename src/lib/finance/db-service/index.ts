@@ -80,8 +80,8 @@ export class DbFinanceService implements FinanceService {
     return acc;
   }
 
-  async deleteAccount(userId: string, accountId: string): Promise<void> {
-    return accounts.deleteAccount(userId, accountId);
+  async deleteAccount(userId: string, accountId: string, expectedVersion?: number): Promise<void> {
+    return accounts.deleteAccount(userId, accountId, expectedVersion);
   }
 
   // ============================================================================
@@ -107,8 +107,8 @@ export class DbFinanceService implements FinanceService {
     return categories.updateCategory(userId, categoryId, data);
   }
 
-  async deleteCategory(userId: string, categoryId: string): Promise<void> {
-    return categories.deleteCategory(userId, categoryId);
+  async deleteCategory(userId: string, categoryId: string, expectedVersion?: number): Promise<void> {
+    return categories.deleteCategory(userId, categoryId, expectedVersion);
   }
 
   async getOrCreateCreditCardPaymentCategory(_userId?: string): Promise<CategoryDTO> {
@@ -161,9 +161,9 @@ export class DbFinanceService implements FinanceService {
     return txn;
   }
 
-  async deleteTransaction(userId: string, transactionId: string): Promise<void> {
+  async deleteTransaction(userId: string, transactionId: string, expectedVersion?: number): Promise<void> {
     const txn = await transactions.getTransaction(userId, transactionId).catch(() => null);
-    await transactions.deleteTransaction(userId, transactionId);
+    await transactions.deleteTransaction(userId, transactionId, expectedVersion);
     if (txn && txn.type === 'transfer' && txn.toAccountId) {
       try {
         await valuations.recomputeDepositValuations(userId, txn.toAccountId);
@@ -232,8 +232,8 @@ export class DbFinanceService implements FinanceService {
     return budgets.updateBudget(userId, budgetId, data);
   }
 
-  async deleteBudget(userId: string, budgetId: string): Promise<void> {
-    return budgets.deleteBudget(userId, budgetId);
+  async deleteBudget(userId: string, budgetId: string, expectedVersion?: number): Promise<void> {
+    return budgets.deleteBudget(userId, budgetId, expectedVersion);
   }
 
   // ============================================================================
@@ -262,8 +262,8 @@ export class DbFinanceService implements FinanceService {
     return recurring.updateRecurringRule(userId, ruleId, data);
   }
 
-  async deleteRecurringRule(userId: string, ruleId: string): Promise<void> {
-    return recurring.deleteRecurringRule(userId, ruleId);
+  async deleteRecurringRule(userId: string, ruleId: string, expectedVersion?: number): Promise<void> {
+    return recurring.deleteRecurringRule(userId, ruleId, expectedVersion);
   }
 
   // ============================================================================

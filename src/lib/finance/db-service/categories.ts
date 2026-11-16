@@ -1,6 +1,7 @@
 import { and, eq, or } from 'drizzle-orm';
 import { db, finCategories } from '@src/lib/db';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@src/app/api/utils';
+import { BadRequestError, ForbiddenError, NotFoundError, ConflictError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import {
   type CategoryDTO,
   type CategoryFilters,
@@ -20,6 +21,7 @@ export function mapCategoryToDTO(row: typeof finCategories.$inferSelect): Catego
     icon: row.icon,
     color: row.color,
     isSystem: row.isSystem,
+    version: row.version ?? 1,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
@@ -127,18 +129,24 @@ export async function createCategory(
     }
   }
 
-  const [row] = await db
-    .insert(finCategories)
-    .values({
-      userId,
-      name: validated.name,
-      type: validated.type,
-      parentId: validated.parentId || null,
-      icon: validated.icon || null,
-      color: validated.color || null,
-      isSystem: false,
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finCategories)
+      .values({
+        userId,
+        name: validated.name,
+        type: validated.type,
+        parentId: validated.parentId || null,
+        icon: validated.icon || null,
+        color: validated.color || null,
+        isSystem: false,
+        version: 1,
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   return mapCategoryToDTO(row);
 }
@@ -159,6 +167,11 @@ export async function updateCategory(
     throw new NotFoundError(`Category not found: ${categoryId}`);
   }
 
+  // Concurrency check
+  if (validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
+
   if (validated.parentId) {
     if (validated.parentId === categoryId) {
       throw new BadRequestError('A category cannot be its own parent');
@@ -171,6 +184,7 @@ export async function updateCategory(
 
   const updateValues: Partial<typeof finCategories.$inferInsert> = {
     updatedAt: new Date(),
+    version: (existing.version ?? 1) + 1,
   };
 
   if (validated.name !== undefined) updateValues.name = validated.name;
@@ -178,16 +192,25 @@ export async function updateCategory(
   if (validated.icon !== undefined) updateValues.icon = validated.icon;
   if (validated.color !== undefined) updateValues.color = validated.color;
 
-  const [updated] = await db
-    .update(finCategories)
-    .set(updateValues)
-    .where(and(eq(finCategories.id, categoryId), eq(finCategories.userId, userId)))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(finCategories)
+      .set(updateValues)
+      .where(and(eq(finCategories.id, categoryId), eq(finCategories.userId, userId)))
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return row;
+  });
 
   return mapCategoryToDTO(updated);
 }
 
-export async function deleteCategory(userId: string, categoryId: string): Promise<void> {
+export async function deleteCategory(
+  userId: string,
+  categoryId: string,
+  expectedVersion?: number
+): Promise<void> {
   const existing = await getCategory(userId, categoryId);
 
   if (existing.isSystem) {
@@ -198,13 +221,22 @@ export async function deleteCategory(userId: string, categoryId: string): Promis
     throw new NotFoundError(`Category not found: ${categoryId}`);
   }
 
-  // Any child categories referencing this parentId will have parentId unset
-  await db
-    .update(finCategories)
-    .set({ parentId: null, updatedAt: new Date() })
-    .where(eq(finCategories.parentId, categoryId));
+  // Concurrency check
+  if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
 
-  await db
-    .delete(finCategories)
-    .where(and(eq(finCategories.id, categoryId), eq(finCategories.userId, userId)));
+  await db.transaction(async (tx) => {
+    // Any child categories referencing this parentId will have parentId unset
+    await tx
+      .update(finCategories)
+      .set({ parentId: null, updatedAt: new Date() })
+      .where(eq(finCategories.parentId, categoryId));
+
+    await tx
+      .delete(finCategories)
+      .where(and(eq(finCategories.id, categoryId), eq(finCategories.userId, userId)));
+
+    await incrementDataVersion(tx, userId);
+  });
 }

@@ -9,7 +9,7 @@ describe('Environment Validation', () => {
       DATABASE_URL: 'postgres://postgres:secret@db.example.com:6543/postgres',
       CRON_SECRET: 'super-secret-cron-token',
       APP_URL: 'https://app.finzy.com',
-      APP_NAME: 'Finzy',
+      APP_NAME: 'FinZy Custom',
       NODE_ENV: 'production',
     };
 
@@ -17,7 +17,7 @@ describe('Environment Validation', () => {
     expect(env.NEXT_PUBLIC_SUPABASE_URL).toBe('https://example.supabase.co');
     expect(env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe('test-anon-key-abc123xyz');
     expect(env.DATABASE_URL).toBe('postgres://postgres:secret@db.example.com:6543/postgres');
-    expect(env.APP_NAME).toBe('Finzy');
+    expect(env.APP_NAME).toBe('FinZy Custom');
   });
 
   it('prints and throws ONLY missing variable names and never leaks secrets', () => {
@@ -51,5 +51,17 @@ describe('Environment Validation', () => {
 
     const env = validateEnv(rawEnv);
     expect(env.NEXT_PUBLIC_SUPABASE_ANON_KEY).toBe('publishable-key-alias');
+  });
+
+  it('defaults APP_NAME to FinZy when not specified', () => {
+    const rawEnv = {
+      NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'test-anon-key-abc123xyz',
+      DATABASE_URL: 'postgres://postgres:secret@db.example.com:6543/postgres',
+      NODE_ENV: 'production',
+    };
+
+    const env = validateEnv(rawEnv);
+    expect(env.APP_NAME).toBe('FinZy');
   });
 });

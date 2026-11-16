@@ -7,7 +7,7 @@ const envSchema = z.object({
   DIRECT_URL: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(1).optional(),
   APP_URL: z.string().url().default('http://localhost:3000'),
-  APP_NAME: z.string().default('Finzy'),
+  APP_NAME: z.string().default('FinZy'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
@@ -29,7 +29,7 @@ export function validateEnv(rawEnv: Record<string, unknown> = process.env): Env 
       DIRECT_URL: (rawEnv.DIRECT_URL as string) || (rawEnv.DATABASE_URL as string) || 'postgres://postgres:postgres@127.0.0.1:54322/postgres',
       CRON_SECRET: (rawEnv.CRON_SECRET as string) || 'test-cron-secret',
       APP_URL: (rawEnv.APP_URL as string) || 'http://localhost:3000',
-      APP_NAME: (rawEnv.APP_NAME as string) || 'Finzy',
+      APP_NAME: (rawEnv.APP_NAME as string) || 'FinZy',
       NODE_ENV: 'test',
     };
   }

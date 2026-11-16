@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm';
 import { db, finBudgets, finCategories, finTransactions } from '@src/lib/db';
-import { NotFoundError } from '@src/app/api/utils';
+import { NotFoundError, ConflictError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import { getDeterministicCategoryColor } from '../colors';
 import {
   type BudgetDTO,
@@ -21,6 +22,7 @@ export function mapBudgetToDTO(row: typeof finBudgets.$inferSelect): BudgetDTO {
     period: row.period as BudgetDTO['period'],
     startDate: row.startDate,
     endDate: row.endDate,
+    version: row.version ?? 1,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
   };
@@ -169,17 +171,23 @@ export async function createBudget(userId: string, data: CreateBudgetDTO): Promi
     throw new NotFoundError(`Category not found: ${validated.categoryId}`);
   }
 
-  const [row] = await db
-    .insert(finBudgets)
-    .values({
-      userId,
-      categoryId: validated.categoryId,
-      amount: validated.amount,
-      period: validated.period,
-      startDate: validated.startDate,
-      endDate: validated.endDate || null,
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finBudgets)
+      .values({
+        userId,
+        categoryId: validated.categoryId,
+        amount: validated.amount,
+        period: validated.period,
+        startDate: validated.startDate,
+        endDate: validated.endDate || null,
+        version: 1,
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   return mapBudgetToDTO(row);
 }
@@ -190,10 +198,16 @@ export async function updateBudget(
   data: UpdateBudgetDTO
 ): Promise<BudgetDTO> {
   const validated = updateBudgetSchema.parse(data);
-  await getBudget(userId, budgetId);
+  const existing = await getBudget(userId, budgetId);
+
+  // Concurrency check
+  if (validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
 
   const updateValues: Partial<typeof finBudgets.$inferInsert> = {
     updatedAt: new Date(),
+    version: (existing.version ?? 1) + 1,
   };
 
   if (validated.amount !== undefined) updateValues.amount = validated.amount;
@@ -201,19 +215,37 @@ export async function updateBudget(
   if (validated.startDate !== undefined) updateValues.startDate = validated.startDate;
   if (validated.endDate !== undefined) updateValues.endDate = validated.endDate;
 
-  const [updated] = await db
-    .update(finBudgets)
-    .set(updateValues)
-    .where(and(eq(finBudgets.id, budgetId), eq(finBudgets.userId, userId)))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(finBudgets)
+      .set(updateValues)
+      .where(and(eq(finBudgets.id, budgetId), eq(finBudgets.userId, userId)))
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return row;
+  });
 
   return mapBudgetToDTO(updated);
 }
 
-export async function deleteBudget(userId: string, budgetId: string): Promise<void> {
-  await getBudget(userId, budgetId);
+export async function deleteBudget(
+  userId: string,
+  budgetId: string,
+  expectedVersion?: number
+): Promise<void> {
+  const existing = await getBudget(userId, budgetId);
 
-  await db
-    .delete(finBudgets)
-    .where(and(eq(finBudgets.id, budgetId), eq(finBudgets.userId, userId)));
+  // Concurrency check
+  if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(finBudgets)
+      .where(and(eq(finBudgets.id, budgetId), eq(finBudgets.userId, userId)));
+
+    await incrementDataVersion(tx, userId);
+  });
 }

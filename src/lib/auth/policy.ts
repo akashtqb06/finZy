@@ -27,9 +27,11 @@ export class BadRequestError extends Error {
 }
 
 export class ConflictError extends Error {
-    constructor(message = 'Conflict') {
+    currentRecord?: unknown;
+    constructor(message = 'Conflict', currentRecord?: unknown) {
         super(message);
         this.name = 'ConflictError';
+        this.currentRecord = currentRecord;
     }
 }
 

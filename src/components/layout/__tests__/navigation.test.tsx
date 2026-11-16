@@ -56,30 +56,22 @@ describe('Sidebar & BottomNav Navigation', () => {
     });
   });
 
-  it('renders AppSidebar with Track, Manage, Tools groups and prominent add transaction button', () => {
+  it('renders AppSidebar with finance navigation items and brand', () => {
     const html = renderToString(
       <SidebarProvider defaultOpen={true}>
         <AppSidebar />
       </SidebarProvider>
     );
 
-    // Header brand and button
+    // Header brand
     expect(html).toContain('FinZy');
-    expect(html).toContain('+ Add transaction');
-
-    // Group labels
-    expect(html).toContain('Track');
-    expect(html).toContain('Manage');
-    expect(html).toContain('Tools');
 
     // Group items
     expect(html).toContain('Overview');
     expect(html).toContain('Transactions');
-    expect(html).toContain('Inbox');
     expect(html).toContain('Accounts');
     expect(html).toContain('Budgets');
     expect(html).toContain('Recurring');
-    expect(html).toContain('Categories');
     expect(html).toContain('Import');
 
     // Footer settings

@@ -29,6 +29,7 @@ export const accountSchema = z.object({
   currency: z.string().default(DEFAULT_CURRENCY),
   creditLimit: z.number().int().nullable().optional(),
   isActive: z.boolean().default(true),
+  version: z.number().int().optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
@@ -51,6 +52,7 @@ export const updateAccountSchema = z.object({
   currency: z.string().optional(),
   creditLimit: z.number().int().min(0).nullable().optional(),
   isActive: z.boolean().optional(),
+  expectedVersion: z.number().int().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -176,6 +178,7 @@ export const categorySchema = z.object({
   icon: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
   isSystem: z.boolean().default(false),
+  version: z.number().int().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
@@ -197,6 +200,7 @@ export const updateCategorySchema = z.object({
   parentId: z.string().nullable().optional(),
   icon: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
+  expectedVersion: z.number().int().optional(),
 });
 
 export type UpdateCategoryDTO = z.infer<typeof updateCategorySchema>;
@@ -229,6 +233,7 @@ export const transactionSchema = z.object({
   isRecurring: z.boolean().default(false),
   recurringRuleId: z.string().nullable().optional(),
   deletedAt: z.string().or(z.date()).nullable().optional(),
+  version: z.number().int().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
   effect: moneyPaiseSchema.optional(),
@@ -280,6 +285,7 @@ export const updateTransactionSchema = z
     payee: z.string().max(200).nullable().optional(),
     note: z.string().max(500).nullable().optional(),
     tags: z.string().nullable().optional(),
+    expectedVersion: z.number().int().optional(),
   })
   .refine(
     (data) => {
@@ -383,6 +389,7 @@ export const budgetSchema = z.object({
   period: z.enum(BUDGET_PERIODS),
   startDate: dateStringSchema,
   endDate: dateStringSchema.nullable().optional(),
+  version: z.number().int().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
@@ -405,6 +412,7 @@ export const updateBudgetSchema = z.object({
   period: z.enum(BUDGET_PERIODS).optional(),
   startDate: dateStringSchema.optional(),
   endDate: dateStringSchema.nullable().optional(),
+  expectedVersion: z.number().int().optional(),
 });
 
 export type UpdateBudgetDTO = z.infer<typeof updateBudgetSchema>;
@@ -453,6 +461,7 @@ export const recurringRuleSchema = z.object({
   endDate: dateStringSchema.nullable().optional(),
   nextOccurrence: dateStringSchema,
   isActive: z.boolean().default(true),
+  version: z.number().int().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
 });
@@ -502,6 +511,7 @@ export const updateRecurringRuleSchema = z.object({
   endDate: dateStringSchema.nullable().optional(),
   nextOccurrence: dateStringSchema.optional(),
   isActive: z.boolean().optional(),
+  expectedVersion: z.number().int().optional(),
 });
 
 export type UpdateRecurringRuleDTO = z.infer<typeof updateRecurringRuleSchema>;

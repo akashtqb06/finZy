@@ -18,7 +18,7 @@ export interface EnvironmentInfo {
 
 export async function getGeneralSettings(): Promise<GeneralSettings> {
     return {
-        appName: process.env.APP_NAME || 'Finzy',
+        appName: process.env.APP_NAME || 'FinZy',
         allowRegistration: false,
         sessionLifetimeDays: 30,
         allowedConnectorTypes: [],
@@ -27,7 +27,7 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
 
 export async function getPublicSettings(): Promise<PublicSettings> {
     return {
-        appName: process.env.APP_NAME || 'Finzy',
+        appName: process.env.APP_NAME || 'FinZy',
     };
 }
 
@@ -46,7 +46,7 @@ export async function updateGeneralSettings(
     _adminUserId?: string
 ): Promise<GeneralSettings> {
     return {
-        appName: updates.appName || process.env.APP_NAME || 'Finzy',
+        appName: updates.appName || process.env.APP_NAME || 'FinZy',
         allowRegistration: updates.allowRegistration ?? false,
         sessionLifetimeDays: updates.sessionLifetimeDays ?? 30,
         allowedConnectorTypes: updates.allowedConnectorTypes ?? [],

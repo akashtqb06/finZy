@@ -36,3 +36,4 @@ export async function updateProfileTimezoneAction(timezone: string): Promise<{ o
     revalidatePath('/settings/profile');
     return { ok: true };
 }
+

@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, finAccounts, finRecurringRules, finTransactions } from '@src/lib/db';
-import { NotFoundError } from '@src/app/api/utils';
+import { NotFoundError, ConflictError } from '@src/app/api/utils';
+import { incrementDataVersion } from './sync';
 import { ACCOUNT_KIND_CLASS_MAP } from '../constants';
 import {
   type AccountDTO,
@@ -26,6 +27,7 @@ export function mapAccountToDTO(row: typeof finAccounts.$inferSelect): AccountDT
     currency: row.currency,
     creditLimit: row.creditLimit !== null ? Number(row.creditLimit) : null,
     isActive: row.isActive,
+    version: row.version ?? 1,
     metadata: (row.metadata || {}) as Record<string, unknown>,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
@@ -194,19 +196,25 @@ export async function createAccount(
   const validated = createAccountSchema.parse(data);
   const accountClass = ACCOUNT_KIND_CLASS_MAP[validated.kind];
 
-  const [row] = await db
-    .insert(finAccounts)
-    .values({
-      userId,
-      name: validated.name,
-      kind: validated.kind,
-      class: accountClass,
-      currency: validated.currency || 'INR',
-      creditLimit: validated.creditLimit !== undefined ? validated.creditLimit : null,
-      isActive: true,
-      metadata: validated.metadata || {},
-    })
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(finAccounts)
+      .values({
+        userId,
+        name: validated.name,
+        kind: validated.kind,
+        class: accountClass,
+        currency: validated.currency || 'INR',
+        creditLimit: validated.creditLimit !== undefined ? validated.creditLimit : null,
+        isActive: true,
+        version: 1,
+        metadata: validated.metadata || {},
+      })
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return inserted;
+  });
 
   if (row.kind === 'recurring_deposit') {
     try {
@@ -233,10 +241,16 @@ export async function updateAccount(
   const validated = updateAccountSchema.parse(data);
 
   // Check account exists and belongs to user
-  await getAccount(userId, accountId);
+  const existing = await getAccount(userId, accountId);
+
+  // Concurrency check
+  if (validated.expectedVersion !== undefined && existing.version !== validated.expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
 
   const updateValues: Partial<typeof finAccounts.$inferInsert> = {
     updatedAt: new Date(),
+    version: (existing.version ?? 1) + 1,
   };
 
   if (validated.name !== undefined) updateValues.name = validated.name;
@@ -245,11 +259,16 @@ export async function updateAccount(
   if (validated.isActive !== undefined) updateValues.isActive = validated.isActive;
   if (validated.metadata !== undefined) updateValues.metadata = validated.metadata;
 
-  const [updated] = await db
-    .update(finAccounts)
-    .set(updateValues)
-    .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(finAccounts)
+      .set(updateValues)
+      .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)))
+      .returning();
+
+    await incrementDataVersion(tx, userId);
+    return row;
+  });
 
   if (updated.kind === 'recurring_deposit') {
     try {
@@ -268,51 +287,64 @@ export async function updateAccount(
   return mapAccountToDTO(updated);
 }
 
-export async function deleteAccount(userId: string, accountId: string): Promise<void> {
+export async function deleteAccount(
+  userId: string,
+  accountId: string,
+  expectedVersion?: number
+): Promise<void> {
   // Check account exists and belongs to user
-  await getAccount(userId, accountId);
+  const existing = await getAccount(userId, accountId);
 
-  // Deactivate any recurring rule pointing to this RD
-  try {
-    await db
-      .update(finRecurringRules)
-      .set({ isActive: false, updatedAt: new Date() })
+  // Concurrency check
+  if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+    throw new ConflictError('Changed on another device', existing);
+  }
+
+  await db.transaction(async (tx) => {
+    // Deactivate any recurring rule pointing to this RD
+    try {
+      await tx
+        .update(finRecurringRules)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(finRecurringRules.userId, userId),
+            eq(finRecurringRules.toAccountId, accountId)
+          )
+        );
+    } catch (err) {
+      console.warn(`[deleteAccount] disabling recurring rules for ${accountId} failed:`, err);
+    }
+
+    // Check if any non-deleted transactions exist for this account
+    const existingTx = await tx
+      .select({ id: finTransactions.id })
+      .from(finTransactions)
       .where(
         and(
-          eq(finRecurringRules.userId, userId),
-          eq(finRecurringRules.toAccountId, accountId)
-        )
-      );
-  } catch (err) {
-    console.warn(`[deleteAccount] disabling recurring rules for ${accountId} failed:`, err);
-  }
-
-  // Check if any non-deleted transactions exist for this account
-  const tx = await db
-    .select({ id: finTransactions.id })
-    .from(finTransactions)
-    .where(
-      and(
-        eq(finTransactions.userId, userId),
-        and(
-          sql`(${finTransactions.accountId} = ${accountId} OR ${finTransactions.toAccountId} = ${accountId})`,
-          sql`${finTransactions.deletedAt} IS NULL`
+          eq(finTransactions.userId, userId),
+          and(
+            sql`(${finTransactions.accountId} = ${accountId} OR ${finTransactions.toAccountId} = ${accountId})`,
+            sql`${finTransactions.deletedAt} IS NULL`
+          )
         )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (tx.length > 0) {
-    // Soft archive instead of delete when transactions exist
-    await db
-      .update(finAccounts)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)));
-  } else {
-    // Hard delete if no transactions exist
-    await db
-      .delete(finAccounts)
-      .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)));
-  }
+    if (existingTx.length > 0) {
+      // Soft archive instead of delete when transactions exist
+      await tx
+        .update(finAccounts)
+        .set({ isActive: false, updatedAt: new Date(), version: (existing.version ?? 1) + 1 })
+        .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)));
+    } else {
+      // Hard delete if no transactions exist
+      await tx
+        .delete(finAccounts)
+        .where(and(eq(finAccounts.id, accountId), eq(finAccounts.userId, userId)));
+    }
+
+    await incrementDataVersion(tx, userId);
+  });
 }
 
